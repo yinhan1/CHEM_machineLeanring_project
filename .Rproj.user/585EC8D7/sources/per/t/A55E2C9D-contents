@@ -1,0 +1,110 @@
+#install.packages("factoextra"), if necessary
+#.rs.restartR() #to restart R to get rid of attachments
+rm(list = ls()) # Start from scratch
+library(cluster)    # k-mean clustering 
+library(factoextra) # k-mean visualization
+library(ggplot2)
+#load in and create a data frame with numerical only
+Data=read.csv(file.path("C:/Users/ccln7/Dropbox/Math/StatsResearch",
+                        "DatabaseNoRepCompoundsNUM.csv"))
+#Data[Data==-300]=NA
+Gurl=Data
+#Gurl[,2]=Data[,1]
+Data[Gurl==-300]=NA
+Data=na.omit(Data)
+
+Compound=Data$Compound
+rownames(Data)=Compound
+Chem_Group=Data$GroupCat
+Data=data.frame(Data[,-c(1,2)])#gets rid of compound names and groups
+#---------------------------------------------------
+#Principal Components Analysis
+pr.out=prcomp(Data, scale=TRUE)
+#biplot(pr.out, choices = 1:2, scale = 1, pc.biplot = FALSE)
+summary(pr.out)$importance[,1:17]#95%
+PCA_Data=pr.out$x[,1:17]
+Data.scaled=scale(PCA_Data)
+
+#---------------------------------------------------
+#K clusters Data and graphs
+
+number_of_cluster = 2
+K = kmeans(Data.scaled, centers = number_of_cluster, nstart = 25)
+Cluster_2 = K$cluster
+fviz_cluster(K, data = Data.scaled, geom = "point", main = 'Cluster_2')
+
+number_of_cluster = 3
+K = kmeans(Data.scaled, centers = number_of_cluster, nstart = 25)
+Cluster_3 = K$cluster
+fviz_cluster(K, data = Data.scaled, geom = "point",main = 'Cluster_3')
+
+number_of_cluster = 4
+K = kmeans(Data.scaled, centers = number_of_cluster, nstart = 25)
+Cluster_4 = K$cluster
+fviz_cluster(K, data = Data.scaled, geom = "point", main = 'Cluster_4')
+
+number_of_cluster = 5
+K = kmeans(Data.scaled, centers = number_of_cluster, nstart = 25)
+Cluster_5 = K$cluster
+fviz_cluster(K, data = Data.scaled, geom = "point", main = 'Cluster_5')
+
+number_of_cluster = 6
+K = kmeans(Data.scaled, centers = number_of_cluster, nstart = 25)
+Cluster_6 = K$cluster
+#fviz_cluster(K, data = Data.scaled, geom = "point", main = 'Cluster_6')
+
+number_of_cluster = 7
+K = kmeans(Data.scaled, centers = number_of_cluster, nstart = 25)
+Cluster_7 = K$cluster
+fviz_cluster(K, data = Data.scaled, geom = "point", main = 'Cluster_7')
+
+number_of_cluster = 10
+K = kmeans(Data.scaled, centers = number_of_cluster, nstart = 25)
+Cluster_10 = K$cluster
+fviz_cluster(K, data = Data.scaled, geom = "point", main = 'Cluster_10')
+
+number_of_cluster = 15
+K = kmeans(Data.scaled, centers = number_of_cluster, nstart = 25)
+Cluster_15 = K$cluster
+fviz_cluster(K, data = Data.scaled, geom = "point",main = 'Cluster_15')
+
+Cluster_Data = data.frame(Compound, Chem_Group, Cluster_2, Cluster_3, Cluster_4, Cluster_5, 
+                          Cluster_6, Cluster_7, Cluster_10, Cluster_15)
+
+#saves cluster infor in stats folder and matlab folder
+write.csv(Cluster_Data,file.path("C:/Users/ccln7/Dropbox/Math/StatsResearch",
+                                 "Cluster_Data.csv"), row.names = FALSE)
+#write.csv(Cluster_Data,file.path("C:/Users/ccln7/MATLAB Drive/Research/ChanelsCode/MClusters",
+#                                 "Cluster_Data.csv"), row.names = FALSE)
+
+
+#optimal clusters
+ fviz_nbclust(Data.scaled, kmeans, method = "wss")
+ fviz_nbclust(Data.scaled, kmeans, method = "silhouette")
+ gap_stat = clusGap(Data.scaled, FUN = kmeans, nstart = 25, K.max = 20, B = 50)
+ fviz_gap_stat(gap_stat)
+
+
+#install.packages("mclust")
+library(mclust)
+M=Mclust(Data.scaled)
+Mcluster=M$classification
+Mcluster_Data=data.frame(Compound,Chem_Group,Mcluster)
+
+write.csv(Mcluster_Data,file.path("C:/Users/ccln7/Dropbox/Math/StatsResearch",
+                                 "Mcluster_Data.csv"), row.names = FALSE)
+write.csv(Mcluster_Data,file.path("C:/Users/ccln7/MATLAB Drive/Research/ChanelsCode/Mclust",
+                                  "Mcluster_Data.csv"), row.names = FALSE)
+MC1=subset(Mcluster_Data,Mcluster_Data$Mcluster==1)
+MC2=subset(Mcluster_Data,Mcluster_Data$Mcluster==2)
+MC3=subset(Mcluster_Data,Mcluster_Data$Mcluster==3)
+
+BIC = mclustBIC(PCA_Data)
+plot(BIC)
+mod = Mclust(PCA_Data, x = BIC)
+summary(mod)
+plot(mod, what="classification", dimens = c(1,2))
+plot(mod, what="classification", dimens = c(2,3))
+plot(mod, what="classification", dimens = c(1,3))
+
+

@@ -1,0 +1,3 @@
+"0","data_pca = get_pc_space(data, k = 13) %>% scale()"
+"0","data_svm = data.frame(data_pca, y = as.factor(group_cat_text))"
+"0","folds = createFolds(data_svm$y, k = 5, list = TRUE, returnTrain = FALSE)"

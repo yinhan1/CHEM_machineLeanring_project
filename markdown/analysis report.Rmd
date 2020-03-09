@@ -1,0 +1,935 @@
+---
+title: "Analysis Summary"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  bookdown::html_document2:
+    number_sections: no
+    fig_caption: true
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: hide
+header-includes:
+- \usepackage{graphicx}
+- \usepackage{float}
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup knit, include=FALSE}
+knitr::opts_chunk$set(
+	fig.align = "center",
+	fig.pos = "H",
+	fig.width = 10,
+	fig.height = 10,
+	message = FALSE,
+	warning = FALSE,
+	external = TRUE,
+	echo = TRUE
+)
+
+library(tidyverse)
+library(magrittr)
+library(plotly)
+library(fastDummies)
+library(ggalt)
+library(reshape2)
+library(RColorBrewer)
+library(kableExtra)
+library(ggsci)
+
+library(cluster)
+library(factoextra)
+library(mclust)
+library(neuralnet)
+library(dendextend)  # color dendrogram 
+
+source("../R script/functions.R")
+```
+
+
+
+```{r load and clean data}
+## Data Cleaning
+
+# load raw data files
+data = read.csv("../data/filledDatabase111119NUMONLY.csv")
+
+# clean data 
+data = clean_data(data)
+
+# separate compound and group_cate from the predictors
+compound = data$Compound
+group_cat = data$GroupCat
+X = data$X
+
+group_cat_text = paste("Grp", group_cat)
+data = select(data, -c("Compound","GroupCat","X"))
+```
+
+## Hierarchical model 
+
+```{r}
+data_matrix = data %>% as.matrix()
+
+model_complete = hclust( dist(data_matrix), method = "complete" )
+
+## use elbow ... etc to decide K
+```
+
+```{r}
+summary(X) %>% 
+  as.data.frame() %>%
+  set_colnames("Frequency") %>%
+  rownames_to_column("X") %>%
+  arrange(desc(Frequency)) %>% 
+  t() %>%
+  kable(caption = "Frequency table for cluster X of data version 11/11/19") %>% 
+  kable_styling(bootstrap_options = "striped")
+```
+
+
+
+
+
+
+
+
+
+
+## Cluster O
+
+### PCA circle
+
+```{r fig.cap="Cluster O: vectors of predictors in the space of PC1 and PC2"}
+# data slicing 
+rows_to_take = X == "O"
+
+subset = data[rows_to_take, ] 
+compound_sub = compound[rows_to_take]
+group_cat_sub = group_cat[rows_to_take]
+group_cat_text_sub = group_cat_text[rows_to_take]
+
+# variables in PC space
+fviz_pca_var(
+  prcomp(subset, scale = TRUE),
+  col.var = "contrib", # Color by contributions to the PC
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE     # Avoid text overlapping
+)
+```
+
+### Compounds in space of PC's
+
+```{r fig.cap="Cluster O: compounds in the space of the first two PC's"}
+set_color = c("#0071C3","#DE501A","#EEB020","#7E2E8E","#79AC2C","#4DBDF7","#A51331") %>% 
+  rep(10)
+
+# extract three two PC's
+data_pca = get_pc_space(subset, k = 3) %>% scale()
+
+# plot
+data.frame(Compound = compound_sub, GroupCat = group_cat_text_sub, data_pca) %>%
+  ggplot(aes(x=PC1, y=PC2, color = GroupCat)) +
+  geom_point(aes(color = GroupCat), size = 2, alpha = 0.4) +
+  geom_text(aes(label=Compound, color=GroupCat), size = 3) +
+  scale_color_manual(values=set_color) +
+  scale_fill_manual(values=set_color) +
+  scale_shape_manual(values=1:11) +
+  theme_minimal()
+```
+
+
+
+### PCA biplot
+
+```{r fig.cap="Cluster O: compounds and predictor vectors in the space of the first two PC's"}
+rownames(subset) = make.names(compound_sub, unique=TRUE)
+fit <- prcomp(subset, scale = TRUE)
+fviz_pca_biplot(fit, aesx = c(1,2),
+                # individual
+                label = "var", labelsize = 4,
+                geom = c("point","text"), fill.ind = group_cat_text_sub, alpha.ind = 0.7,
+                pointsize = 2, pointshape = 21, palette = set_color[1:11],
+                # variable
+                col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel=TRUE) +
+  labs(fill = "Group Cat", color = "Contrib")
+```
+
+
+
+
+## Cluster F
+
+### PCA circle
+
+```{r fig.cap="Cluster F: vectors of predictors in the space of PC1 and PC2"}
+# data slicing 
+rows_to_take = X == "F"
+
+subset = data[rows_to_take, ]
+compound_sub = compound[rows_to_take]
+group_cat_sub = group_cat[rows_to_take]
+group_cat_text_sub = group_cat_text[rows_to_take]
+
+# variables in PC space
+fviz_pca_var(
+  prcomp(subset, scale = TRUE),
+  col.var = "contrib", # Color by contributions to the PC
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE     # Avoid text overlapping
+)
+```
+
+### Compounds in space of PC's
+
+```{r fig.cap="Cluster F: compounds in the space of the first two PC's"}
+# extract three two PC's
+data_pca = get_pc_space(subset, k = 3) %>% scale()
+
+# plot
+data.frame(Compound = compound_sub, GroupCat = group_cat_text_sub, data_pca) %>%
+  ggplot(aes(x=PC1, y=PC2, color = GroupCat)) +
+  geom_point(aes(color = GroupCat), size = 2, alpha = 0.4) +
+  geom_text(aes(label=Compound, color=GroupCat), size = 3) +
+  scale_color_manual(values=set_color) +
+  scale_fill_manual(values=set_color) +
+  scale_shape_manual(values=1:11) +
+  theme_minimal()
+```
+
+### PCA biplot
+
+```{r fig.cap="Cluster F: compounds and predictor vectors in the space of the first two PC's"}
+rownames(subset) = make.names(compound_sub, unique=TRUE)
+fit <- prcomp(subset, scale = TRUE)
+fviz_pca_biplot(fit, aesx = c(1,2),
+                # individual
+                label = "var", labelsize = 4,
+                geom = c("point","text"), fill.ind = group_cat_text_sub, alpha.ind = 0.7,
+                pointsize = 2, pointshape = 21, palette = set_color[1:11],
+                # variable
+                col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel=TRUE) +
+  labs(fill = "Group Cat", color = "Contrib")
+```
+
+
+## Cluster Cl
+
+### PCA circle
+
+```{r fig.cap="Cluster Cl: vectors of predictors in the space of PC1 and PC2"}
+# data slicing 
+rows_to_take = X == "Cl"
+
+subset = data[rows_to_take, ]
+compound_sub = compound[rows_to_take]
+group_cat_sub = group_cat[rows_to_take]
+group_cat_text_sub = group_cat_text[rows_to_take]
+
+# variables in PC space
+fviz_pca_var(
+  prcomp(subset, scale = TRUE),
+  col.var = "contrib", # Color by contributions to the PC
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE     # Avoid text overlapping
+)
+```
+
+### Compounds in space of PC's
+
+```{r fig.cap="Cluster Cl: compounds in the space of the first two PC's"}
+# extract three two PC's
+data_pca = get_pc_space(subset, k = 3) %>% scale()
+
+# plot
+data.frame(Compound = compound_sub, GroupCat = group_cat_text_sub, data_pca) %>%
+  ggplot(aes(x=PC1, y=PC2, color = GroupCat)) +
+  geom_point(aes(color = GroupCat), size = 2, alpha = 0.4) +
+  geom_text(aes(label=Compound, color=GroupCat), size = 3) +
+  scale_color_manual(values=set_color) +
+  scale_fill_manual(values=set_color) +
+  scale_shape_manual(values=1:11) +
+  theme_minimal()
+```
+
+### PCA biplot
+
+```{r fig.cap="Cluster Cl: compounds and predictor vectors in the space of the first two PC's"}
+rownames(subset) = make.names(compound_sub, unique=TRUE)
+fit <- prcomp(subset, scale = TRUE)
+fviz_pca_biplot(fit, aesx = c(1,2),
+                # individual
+                label = "var", labelsize = 4,
+                geom = c("point","text"), fill.ind = group_cat_text_sub, alpha.ind = 0.7,
+                pointsize = 2, pointshape = 21, palette = set_color[1:11],
+                # variable
+                col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel=TRUE) +
+  labs(fill = "Group Cat", color = "Contrib")
+```
+
+
+## Cluster Br
+
+### PCA circle
+
+```{r fig.cap="Cluster Br: vectors of predictors in the space of PC1 and PC2"}
+# data slicing 
+rows_to_take = X == "Br"
+
+subset = data[rows_to_take, ]
+compound_sub = compound[rows_to_take]
+group_cat_sub = group_cat[rows_to_take]
+group_cat_text_sub = group_cat_text[rows_to_take]
+
+# variables in PC space
+fviz_pca_var(
+  prcomp(subset, scale = TRUE),
+  col.var = "contrib", # Color by contributions to the PC
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE     # Avoid text overlapping
+)
+```
+
+### Compounds in space of PC's
+
+```{r fig.cap="Cluster Br: compounds in the space of the first two PC's"}
+# extract three two PC's
+data_pca = get_pc_space(subset, k = 3) %>% scale()
+
+# plot
+data.frame(Compound = compound_sub, GroupCat = group_cat_text_sub, data_pca) %>%
+  ggplot(aes(x=PC1, y=PC2, color = GroupCat)) +
+  geom_point(aes(color = GroupCat), size = 2, alpha = 0.4) +
+  geom_text(aes(label=Compound, color=GroupCat), size = 3) +
+  scale_color_manual(values=set_color) +
+  scale_fill_manual(values=set_color) +
+  scale_shape_manual(values=1:11) +
+  theme_minimal()
+```
+
+### PCA biplot
+
+```{r fig.cap="Cluster Br: compounds and predictor vectors in the space of the first two PC's"}
+rownames(subset) = make.names(compound_sub, unique=TRUE)
+fit <- prcomp(subset, scale = TRUE)
+fviz_pca_biplot(fit, aesx = c(1,2),
+                # individual
+                label = "var", labelsize = 4,
+                geom = c("point","text"), fill.ind = group_cat_text_sub, alpha.ind = 0.7,
+                pointsize = 2, pointshape = 21, palette = set_color[1:11],
+                # variable
+                col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel=TRUE) +
+  labs(fill = "Group Cat", color = "Contrib")
+```
+
+
+## Cluster I
+
+### PCA circle
+
+```{r fig.cap="Cluster I: vectors of predictors in the space of PC1 and PC2"}
+# data slicing 
+rows_to_take = X == "I"
+
+subset = data[rows_to_take, ]
+compound_sub = compound[rows_to_take]
+group_cat_sub = group_cat[rows_to_take]
+group_cat_text_sub = group_cat_text[rows_to_take]
+
+# variables in PC space
+fviz_pca_var(
+  prcomp(subset, scale = TRUE),
+  col.var = "contrib", # Color by contributions to the PC
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE     # Avoid text overlapping
+)
+```
+
+### Compounds in space of PC's
+
+```{r fig.cap="Cluster I: compounds in the space of the first two PC's"}
+# extract three two PC's
+data_pca = get_pc_space(subset, k = 3) %>% scale()
+
+# plot
+data.frame(Compound = compound_sub, GroupCat = group_cat_text_sub, data_pca) %>%
+  ggplot(aes(x=PC1, y=PC2, color = GroupCat)) +
+  geom_point(aes(color = GroupCat), size = 2, alpha = 0.4) +
+  geom_text(aes(label=Compound, color=GroupCat), size = 3) +
+  scale_color_manual(values=set_color) +
+  scale_fill_manual(values=set_color) +
+  scale_shape_manual(values=1:11) +
+  theme_minimal()
+```
+
+### PCA biplot
+
+```{r fig.cap="Cluster I: compounds and predictor vectors in the space of the first two PC's"}
+rownames(subset) = make.names(compound_sub, unique=TRUE)
+fit <- prcomp(subset, scale = TRUE)
+fviz_pca_biplot(fit, aesx = c(1,2),
+                # individual
+                label = "var", labelsize = 4,
+                geom = c("point","text"), fill.ind = group_cat_text_sub, alpha.ind = 0.7,
+                pointsize = 2, pointshape = 21, palette = set_color[1:11],
+                # variable
+                col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel=TRUE) +
+  labs(fill = "Group Cat", color = "Contrib")
+```
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+```{r}
+knitr::opts_chunk$set(
+	message = FALSE,
+	warning = FALSE,
+	include = FALSE,
+	eval = FALSE
+)
+```
+
+## PCA
+
+### PCA circle 
+
+```{r fig.cap="Vectors of predictors in the space of PC1 and PC2"}
+fviz_pca_var(
+  prcomp(data, scale = TRUE),
+  col.var = "contrib", # Color by contributions to the PC
+  gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"),
+  repel = TRUE     # Avoid text overlapping
+)
+```
+
+### PCA importance
+
+Here we choose first 17 PC for further analysis.
+
+```{r pca}
+# print out the cumulative proportions for first k PC's
+print_pca_importance(data, k = 20)
+
+# transform data to a new space
+data_pca = get_pc_space(data, k = 17) %>% scale()
+```
+
+### Compounds in space of PC's
+
+```{r fig.cap="Compounds in the space of the first two PC's"}
+set_color = c("#0071C3","#DE501A","#EEB020","#7E2E8E","#79AC2C","#4DBDF7","#A51331") %>% 
+  rep(10)
+
+data.frame(Compound = compound, GroupCat = group_cat_text, data_pca) %>%
+  ggplot(aes(x=PC1, y=PC2, color = GroupCat)) +
+  geom_point(aes(color = GroupCat), size = 2, alpha = 0.4) +
+  geom_text(aes(label=Compound, color=GroupCat), size = 3) +
+  scale_color_manual(values=set_color) +
+  scale_fill_manual(values=set_color) +
+  scale_shape_manual(values=1:11) +
+  theme_minimal()
+```
+
+### PCA biplot
+
+```{r fig.cap="PCA biplot (compounds and predictor vectors in the space of the first two PC's)"}
+rownames(data) = make.names(compound, unique=TRUE)
+fit <- prcomp(data, cor=TRUE)
+fviz_pca_biplot(fit, aesx = c(1,2),
+                # individual
+                label = "var", labelsize = 4,
+                geom = c("point","text"), fill.ind = group_cat_text, alpha.ind = 0.7,
+                pointsize = 2, pointshape = 21, palette = set_color[1:11],
+                # variable
+                col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel=TRUE) +
+  labs(fill = "Group Cat", color = "Contrib")
+```
+
+
+
+### Cubic vs Tilted
+
+#### 2D
+
+```{r fig.height=5, fig.cap="Cubic and Tilted in the space of the first two PC's"}
+data.frame(Compound = compound, GroupCat = group_cat_text, data_pca) %>%
+  filter(GroupCat %in% c("Grp 3","Grp 5")) %>%
+  ggplot(aes(x=PC1, y=PC2, color = GroupCat)) +
+  # geom_point(aes(color = GroupCat), size = 4, alpha = 0.4) +
+  geom_text(aes(label=Compound, color=GroupCat), size = 3, alpha = 0.7) +
+  scale_color_manual(values=set_color) +
+  scale_fill_manual(values=set_color) +
+  scale_shape_manual(values=1:11) +
+  theme_minimal()
+```
+
+#### 3D
+
+```{r fig.cap="Cubic and Tilted in the space of the first two PC's"}
+data.frame(Compound = compound, GroupCat = group_cat_text, data_pca) %>%
+  filter(GroupCat %in% c("Grp 3","Grp 5")) %>%
+  droplevels() %>%
+  plot_ly(x = ~PC1, y = ~PC2, z = ~PC3, color = ~GroupCat, text = ~Compound, colors = set_color[1:2]) %>%
+  add_markers(marker=list(size = 7, opacity = 0.6)) %>%
+  layout(scene = list(xaxis = list(title = 'PC1'),
+                      yaxis = list(title = 'PC2'),
+                      zaxis = list(title = 'PC3')),
+         title = "Cubic and Titled in the space of PC1, PC2, PC3")
+```
+
+#### Biplot
+
+```{r}
+fit = prcomp(data_biplot, cor=TRUE)
+
+new_color = c()
+
+for(i in 1:11){
+  group_tag = levels(as.factor(group_cat_text))[i]
+  if(group_tag %in% c("Grp 3","Grp 5")){
+    new_color[i] = set_color[i+2]
+  }else{
+    new_color[i] = "white"
+  }
+}
+
+fviz_pca_biplot(fit, aesx = c(1,2),
+                # individual
+                label = "var", labelsize = 4,
+                geom = c("point","text"), fill.ind = group_cat_text, col.ind = "white", alpha.ind = 0.7,
+                pointsize = 2, pointshape = 21, palette = new_color,
+                # variable
+                col.var = "contrib", gradient.cols = c("#00AFBB", "#E7B800", "#FC4E07"), repel=TRUE) +
+  labs(fill = "Group Cat", color = "Contrib", title = "PCA biplot - Cubic and Tilted")
+```
+
+```{r}
+# data_3 = data[group_cat_text %in% c("Grp 3"),] %>% mutate(GroupCat = "Grp 3")
+# data_5 = data[group_cat_text %in% c("Grp 5"),] %>% mutate(GroupCat = "Grp 5")
+# 
+# data_3_5 = rbind(data_3, data_5)
+# ggplot(melt(data_3_5[,c(49:59,60)], id.vars="GroupCat"), aes(value)) + 
+#   geom_histogram(bins = 20, aes(fill=GroupCat), position = "dodge", color = "grey", size = 0.1) + 
+#   facet_wrap(~variable, scales = 'free_x') +
+#   scale_fill_manual(values = set_color) +
+#   theme_bw()
+```
+
+
+## K-means 
+
+### k = 2 
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 2)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 3
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 3)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 4
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 4)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 5 
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 5)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 6
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 6)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 7
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 7)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 8 
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 8)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 9 
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 9)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 10 
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 10)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 11
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 11)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 12 
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 12)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 13
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 13)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+
+### k = 14 
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 14)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 15
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 15)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 16
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 16)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 20
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 20)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 24
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 24)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+### k = 25
+
+```{r}
+kmean_results = get_kmeans_results(data_pca, k = 25)
+get_kmeans_visual_2D(kmean_results)
+```
+
+```{r fig.height=5}
+get_kmeans_histogram(kmean_results)
+```
+
+
+
+
+
+
+```{r kmeans visual} 
+### explore k visually
+
+# choose the number of clusters to explore
+# k = 4
+# 
+# # build a model for kmeans
+# kmean_results = get_kmeans_results(data_pca, k = k)
+# 
+# # generate 2D visual for this k 
+# get_kmeans_visual_2D(kmean_results)
+# 
+# # histogram matlab 
+# get_kmeans_histogram(kmean_results)
+
+# generate 3D visual for this k
+# get_kmeans_visual_3D(kmean_results)
+```
+
+
+
+```{r kmeans save results}
+### save results 
+
+# choose k to save
+# k = c(2:25)
+
+# save the result as csv
+# save_kmeans_results(data, data_pca, k)
+```
+
+
+```{r}
+knitr::opts_chunk$set(
+	fig.width = 10,
+	fig.height = 5
+)
+```
+
+
+## Mclust
+
+Based on a criterion *BIC*, we choose a Gaussian mixture model with 3 components. 
+
+```{r mclust visual}
+### mclust visuals
+
+# build a model for mclust
+model = get_mclust_model(data_pca)
+
+# print summary table of the model
+summary(model)
+
+# generate 2D visual for mclust
+get_mclust_visual_2D(model)
+
+# histogram matlab 
+get_mclust_histogram(model)
+
+# generate 3D visual for mclust
+# get_mclust_visual_3D(model)
+```
+
+
+
+```{r mclust save results}
+### save results 
+
+# save_mclust_results(data, data_pca, compound, group_cat)
+```
+
+
+## Neural Nets
+
+- Classify all data points to 6 largest groups
+- 4-hidden-layer model with leave-one-out achieves classification rate 54% 
+
+<!-- ```{r} -->
+<!-- group_cat %>% check_missing() -->
+<!-- data_pca_scaled = scale(data_pca) %>% as.data.frame() -->
+<!-- ``` -->
+
+<!-- ### K = 3 -->
+
+<!-- ```{r} -->
+<!-- group_cat_dummy = dummy_group_cat(group_cat, k = 3) -->
+<!-- get_nn_cv_rate(group_cat_dummy, data_pca_scaled) %>% mean() -->
+<!-- ``` -->
+
+<!-- ### K = 4 -->
+
+<!-- ```{r} -->
+<!-- group_cat_dummy = dummy_group_cat(group_cat, k = 4) -->
+<!-- get_nn_cv_rate(group_cat_dummy, data_pca_scaled) %>% mean() -->
+<!-- ``` -->x
+
+<!-- ### K = 5 -->
+
+<!-- ```{r} -->
+<!-- group_cat_dummy = dummy_group_cat(group_cat, k = 5) -->
+<!-- get_nn_cv_rate(group_cat_dummy, data_pca_scaled) %>% mean() -->
+<!-- ``` -->
+
+<!-- ### K = 6 -->
+
+<!-- ```{r} -->
+<!-- group_cat_dummy = dummy_group_cat(group_cat, k = 6) -->
+<!-- get_nn_cv_rate(group_cat_dummy, data_pca_scaled) %>% mean() -->
+<!-- ``` -->
+
+<!-- ### K = 7 -->
+
+<!-- ```{r} -->
+<!-- group_cat_dummy = dummy_group_cat(group_cat, k = 7) -->
+<!-- get_nn_cv_rate(group_cat_dummy, data_pca_scaled) %>% mean() -->
+<!-- ``` -->
+
+<!-- ### K = 8 -->
+
+<!-- ```{r} -->
+<!-- group_cat_dummy = dummy_group_cat(group_cat, k = 8) -->
+<!-- get_nn_cv_rate(group_cat_dummy, data_pca_scaled) %>% mean() -->
+<!-- ``` -->
+
+<!-- ### K = 9 -->
+
+<!-- ```{r} -->
+<!-- group_cat_dummy = dummy_group_cat(group_cat, k = 9) -->
+<!-- get_nn_cv_rate(group_cat_dummy, data_pca_scaled) %>% mean() -->
+<!-- ``` -->
+
+
+
+
+
+```{r}
+# # check any missing values in chem group
+# group_cat %>% check_missing()
+# 
+# # dummy first k chem group
+# group_cat_dummy = dummy_group_cat(group_cat, k = 5)
+# 
+# # normalize data_pca
+# data_pca_scaled = scale(data_pca) %>% as.data.frame()
+# 
+# # compute cv classification rate
+# get_nn_cv_rate(group_cat_dummy, data_pca_scaled) %>% mean()
+
+# build a model for neural nets
+# model = get_nn_model(group_cat_dummy, data_pca_scaled)
+
+# plot neural nets
+# library(devtools)
+# source_url('https://gist.githubusercontent.com/fawda123/7471137/raw/466c1474d0a505ff044412703516c34f1a4684a5/nnet_plot_update.r')
+# plot.nnet(model)
+
+# save nn results 
+# save_nn_results(model, compound, group_cat, data, names(group_cat_dummy))
+
+# save model weights (layers = 20,10,5)
+# data.frame(weight = model$result.matrix) %>% 
+#   rownames_to_column() %>% 
+#   filter(between(row_number(), 4, n())) %>% 
+#   separate(rowname, c("node_in","node_out"), sep = ".to.") %>%
+#   write.csv("../result/nn weights.csv", row.names = FALSE)
+```
+
+
+
+```{r}
+### explore for k 
+
+# k = c(3:11)
+# 
+# dummy = list()
+# for(i in 1:length(k)){
+#   dummy[[i]] = repeat_B(k = k[i])
+# }
+# 
+# data.frame(dummy) %>% 
+#   set_colnames(paste("k=", k, sep="")) %>%
+#   reshape2::melt() %>%
+#   ggplot(aes(x = value)) +
+#   geom_histogram(bins = 30) +
+#   labs(x="Classification Rate", y="Frequency") +
+#   theme_bw() + coord_flip() +
+#   facet_grid(~variable)
+
+
+# data.frame(dummy) %>% set_colnames(paste("k=", k, sep="")) %>%
+#   write.csv("../result/nn class rate.csv", row.names = FALSE)
+```
+
+
+

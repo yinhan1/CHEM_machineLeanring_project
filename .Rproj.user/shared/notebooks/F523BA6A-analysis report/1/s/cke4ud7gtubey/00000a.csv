@@ -1,0 +1,8 @@
+"0","summary(X) %>% "
+"0","  as.data.frame() %>%"
+"0","  set_colnames(""Frequency"") %>%"
+"0","  rownames_to_column(""X"") %>%"
+"0","  arrange(desc(Frequency)) %>% "
+"0","  t() %>%"
+"0","  kable(caption = ""Frequency table for cluster X of data version 11/11/19"") %>% "
+"0","  kable_styling(bootstrap_options = ""striped"")"

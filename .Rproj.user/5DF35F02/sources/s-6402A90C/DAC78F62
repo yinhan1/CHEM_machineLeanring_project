@@ -1,0 +1,26 @@
+{
+    "collab_server" : "",
+    "contents" : "",
+    "created" : 1583777332077.000,
+    "dirty" : false,
+    "encoding" : "UTF-8",
+    "folds" : "63|16|114|0|\n",
+    "hash" : "0",
+    "id" : "DAC78F62",
+    "lastKnownWriteTime" : 1583779272,
+    "last_content_update" : 1583779336040,
+    "path" : "~/Dropbox (CSU Fullerton)/Research Project/Solid State Chemistry/ChemStatsResearch/Chem Stats R code/markdown/predictive models.Rmd",
+    "project_path" : "markdown/predictive models.Rmd",
+    "properties" : {
+        "chunk_output_type" : "inline",
+        "cursorPosition" : "27,0",
+        "scrollLine" : "23"
+    },
+    "read_only" : false,
+    "read_only_alternatives" : [
+    ],
+    "relative_order" : 2,
+    "source_on_save" : false,
+    "source_window" : "",
+    "type" : "r_markdown"
+}

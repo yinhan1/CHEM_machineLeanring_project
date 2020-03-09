@@ -1,0 +1,173 @@
+---
+title: "Predictive Models"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  bookdown::html_document2:
+    number_sections: no
+    fig_caption: true
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: hide
+header-includes:
+- \usepackage{graphicx}
+- \usepackage{float}
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup knit, include=FALSE}
+knitr::opts_chunk$set(
+	fig.align = "center",
+	fig.pos = "H",
+	message = FALSE,
+	warning = FALSE,
+	external = TRUE,
+	echo = TRUE
+)
+
+library(tidyverse)
+library(magrittr)
+library(kableExtra)
+
+library(e1071)
+library(caret)
+
+source("../R script/functions.R")
+```
+
+
+```{r data cleaning}
+# load raw data files
+data = read.csv("../data/filledDatabase111119NUMONLY.csv")
+# clean data 
+data = clean_data(data)
+
+# separate compound and group_cate from the predictors
+compound = data$Compound
+group_cat = data$GroupCat
+X = data$X
+
+group_cat_text = paste("Grp", group_cat)
+data = select(data, -c("Compound","GroupCat","X"))
+```
+
+
+```{r pca and 5-fold cv}
+data_pca = get_pc_space(data, k = 13) %>% scale()
+data_svm = data.frame(data_pca, y = as.factor(group_cat_text))
+folds = createFolds(data_svm$y, k = 5, list = TRUE, returnTrain = FALSE)
+```
+
+
+
+## SVM {.tabset}
+
+```{r}
+t = list()
+rate = c()
+for(i in 1:5){
+  data_test = data_svm[folds[[i]],]
+  data_train = data_svm[-folds[[i]],]
+  
+  model = svm(y ~ ., data = data_train, scale = FALSE, kernel = "radial", cost = 5)
+  t[[i]] = table(pred = predict(model, data_test), truth = data_test$y)
+  
+  rate[i] = mean(predict(model, data_test) == data_test$y)
+}
+
+rate
+mean(rate)
+```
+
+
+### Count
+
+```{r}
+m = Reduce("+", t) %>% as.matrix() 
+
+diag(m) = cell_spec(diag(m), 
+                    background = ifelse(diag(m)>=0, "red","white"),
+                    color = ifelse(diag(m)>=0, "white", "black"),
+                    bold = ifelse(diag(m)>=0, T, F))
+rbind(m, 
+      Total = table(group_cat_text)) %>% 
+  kable(escape = F, booktabs = T) %>%
+  kable_styling()
+```
+
+### Percent
+
+```{r}
+m = Reduce("+", t) %>% as.matrix()
+m2 = sweep(m,2,colSums(m),`/`) %>% round(2)
+  
+diag(m2) = cell_spec(diag(m2), 
+                    background = ifelse(diag(m2)>=0, "red","white"),
+                    color = ifelse(diag(m2)>=0, "white", "black"),
+                    bold = ifelse(diag(m2)>=0, T, F))
+rbind(m2,
+      Total = rep("100%", ncol(m))) %>% 
+  kable(escape = F, booktabs = T) %>%
+  kable_styling()
+```
+
+
+## Multinomial reg {.tabset}
+
+```{r}
+library(nnet)
+
+t = list()
+rate = c()
+for(i in 1:5){
+  data_test = data_svm[folds[[i]],]
+  data_train = data_svm[-folds[[i]],]
+  
+  model = multinom(y ~ ., data = data_train, trace = FALSE)
+  pred_y = factor(predict(model, data_test), levels = levels(data_test$y))
+  t[[i]] = table(pred = pred_y, truth = data_test$y)
+  
+  rate[i] = mean(pred_y == data_test$y)
+}
+```
+
+```{r}
+rate
+mean(rate)
+```
+
+
+### Count
+
+```{r}
+m = Reduce("+", t) %>% as.matrix() 
+
+diag(m) = cell_spec(diag(m), 
+                    background = ifelse(diag(m)>=0, "red","white"),
+                    color = ifelse(diag(m)>=0, "white", "black"),
+                    bold = ifelse(diag(m)>=0, T, F))
+rbind(m,
+      Total = table(group_cat_text)) %>% 
+  kable(escape = F, booktabs = T) %>%
+  kable_styling()
+```
+
+### Percent
+
+```{r}
+m = Reduce("+", t) %>% as.matrix() 
+m2 = sweep(m,2,colSums(m),`/`) %>% round(2)
+  
+diag(m2) = cell_spec(diag(m2), 
+                    background = ifelse(diag(m2)>=0, "red","white"),
+                    color = ifelse(diag(m2)>=0, "white", "black"),
+                    bold = ifelse(diag(m2)>=0, T, F))
+rbind(m2,
+      Total = rep("100%", ncol(m))) %>% 
+  kable(escape = F, booktabs = T) %>%
+  kable_styling()
+```
+
+
+
