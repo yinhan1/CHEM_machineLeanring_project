@@ -1,5 +1,0 @@
-"0","data_matrix = data %>% as.matrix()"
-"0",""
-"0","model_complete = hclust( dist(data_matrix), method = ""complete"" )"
-"0",""
-"0","## use elbow ... etc to decide K"

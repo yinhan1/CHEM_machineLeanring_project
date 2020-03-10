@@ -1,3 +1,0 @@
-"0","fit = prcomp(data_biplot, cor=TRUE)"
-"2","Error in prcomp(data_biplot, cor = TRUE) : object 'data_biplot' not found
-"

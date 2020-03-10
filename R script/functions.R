@@ -362,11 +362,100 @@ repeat_B = function(k){
 
 #-----------------------------------------------------------------------------------
 
-get_svm = function(train, y_test){
-  
-  model = svm(y ~ ., data = train, kernel = "linear", cost = 10, scale = FALSE)
-  table(pred = predict(model, data), truth = y_test) 
+collapse_data <- function(data){
+  data %>% 
+    mutate(GroupCat = fct_other(factor(GroupCat), keep = c(16,6,3,5), other_level = 'Other'))
 }
+
+  
+#-----------------------------------------------------------------------------------
+
+get_coef <- function(cv_model){
+  coef_packed = coef(cv_model, s = cv_model$lambda.min)
+   
+  do.call(cbind, coef_packed) %>% 
+    as.matrix() %>% as.data.frame() %>% 
+    set_colnames(names(coef_packed)) %>% 
+    rownames_to_column("feature") %>% 
+    as.data.frame()
+}
+ 
+
+#-----------------------------------------------------------------------------------
+
+plot_coef <- function(coef_table){
+  coef_table %>% 
+    reshape2::melt(id.vars = "feature") %>% 
+    ggplot(aes(x = feature, y = value, color = variable)) +
+    geom_point() +
+    geom_hline(yintercept = 0, size = 5, alpha = 0.3, color = "grey50") +
+    scale_color_nejm() +
+    facet_wrap(variable~., nrow=1) +
+    labs(x = "", y = "Coefficient", color = "Group") +
+    theme_minimal() +
+    theme(axis.text.x = element_text(angle = 90)) +
+    coord_flip()
+}
+
+
+#-----------------------------------------------------------------------------------
+
+prediction_table <- function(alpha, lambda){
+  t = lapply(folds, function(id) {
+    X_test = X[id,]; X_train = X[-id,]
+    Y_test = Y[id]; Y_train = Y[-id]
+    model_lasso = glmnet(x = X_train, y = Y_train, alpha = alpha, family = "multinomial")
+    Y_pred = predict(model_lasso, newx = X_test, type = "class", s = lambda)
+    table(factor(Y_pred, levels = levels(factor(Y))), factor(Y_test))
+  }) 
+  r = lapply(t, function(x) sum(diag(x))/sum(x)) %>% unlist()
+  t = Reduce("+",t) %>% as.matrix()
+  return(list(r=r, t=t))
+}
+
+
+
+#-----------------------------------------------------------------------------------
+
+print_accurate_tb <- function(r){
+  t(r) %>% data.frame() %>% cbind(Mean = mean(r)) %>% kable(escape = F, booktabs = T) %>% kable_styling()
+}
+
+
+
+#-----------------------------------------------------------------------------------
+
+highlight_tb_count <- function(m){
+  total = colSums(m)
+  diag(m) = cell_spec(diag(m), 
+                      background = ifelse(diag(m)>=0, "red","white"),
+                      color = ifelse(diag(m)>=0, "white", "black"),
+                      bold = ifelse(diag(m)>=0, T, F))
+  rbind(m, Total = total) %>% 
+    kable(escape = F, booktabs = T) %>%
+    kable_styling()
+}
+
+
+
+#-----------------------------------------------------------------------------------
+
+highlight_tb_percent <- function(m){
+  m2 = sweep(m,2,colSums(m),`/`) %>% round(2)
+  diag(m2) = cell_spec(diag(m2), 
+                       background = ifelse(diag(m2)>=0, "red","white"),
+                       color = ifelse(diag(m2)>=0, "white", "black"),
+                       bold = ifelse(diag(m2)>=0, T, F))
+  rbind(m2,
+        Total = rep("100%", ncol(m))) %>% 
+    kable(escape = F, booktabs = T) %>%
+    kable_styling()
+}
+
+
+
+
+
 
 
 
