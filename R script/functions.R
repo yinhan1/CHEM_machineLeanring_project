@@ -370,15 +370,16 @@ collapse_data <- function(data){
   
 #-----------------------------------------------------------------------------------
 
-get_coef <- function(cv_model){
-  coef_packed = coef(cv_model, s = cv_model$lambda.min)
-   
+get_coef <- function(cv_model, tuning_parameter){
+  coef_packed = coef(cv_model, s = tuning_parameter)
+  
   do.call(cbind, coef_packed) %>% 
     as.matrix() %>% as.data.frame() %>% 
     set_colnames(names(coef_packed)) %>% 
     rownames_to_column("feature") %>% 
     as.data.frame()
 }
+
  
 
 #-----------------------------------------------------------------------------------
@@ -404,8 +405,8 @@ prediction_table <- function(alpha, lambda){
   t = lapply(folds, function(id) {
     X_test = X[id,]; X_train = X[-id,]
     Y_test = Y[id]; Y_train = Y[-id]
-    model_lasso = glmnet(x = X_train, y = Y_train, alpha = alpha, family = "multinomial")
-    Y_pred = predict(model_lasso, newx = X_test, type = "class", s = lambda)
+    model = glmnet(x = X_train, y = Y_train, alpha = alpha, family = "multinomial")
+    Y_pred = predict(model, newx = X_test, type = "class", s = lambda)
     table(factor(Y_pred, levels = levels(factor(Y))), factor(Y_test))
   }) 
   r = lapply(t, function(x) sum(diag(x))/sum(x)) %>% unlist()
@@ -451,6 +452,14 @@ highlight_tb_percent <- function(m){
     kable(escape = F, booktabs = T) %>%
     kable_styling()
 }
+
+
+
+#-----------------------------------------------------------------------------------
+
+
+
+
 
 
 
