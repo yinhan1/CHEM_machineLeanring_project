@@ -39,7 +39,8 @@ source("../R script/functions.R")
 
 ```{r data cleaning}
 # load raw data files
-data <- read.csv("../data/filledDatabase111119NUMONLY.csv")
+data <- read.csv("../data/filledDatabase.csv")[,-c(2:9,11:13)]
+
 # clean data 
 data <- clean_data(data) %>% collapse_data()
 
@@ -48,8 +49,8 @@ compound <- data$Compound
 group_cat <- data$GroupCat
 
 # create data constructed by first 13 PC's
-data <- select(data, -c("Compound","X"))
-data_pca <- get_pc_space(data[,-1], k = 13) %>% scale() %>% data.frame()
+data <- select(data, -c("Compound","X","Z"))
+# data_pca <- get_pc_space(data[,-1], k = 13) %>% scale() %>% data.frame()
 
 # split data into 5 folds for cross validation later
 folds <- caret::createFolds(1:nrow(data), k = 5, list = TRUE, returnTrain = FALSE)
@@ -87,14 +88,20 @@ plot(model_lasso, xvar = "lambda", label = TRUE)
 
 ```{r fig.height=20, fig.width=10} 
 ridge_cv <- cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "deviance", family = "multinomial") 
-ridge_cv %>% get_coef(tuning_parameter = ridge_cv$lambda.min) %>% plot_coef()
+ridge_cv %>% 
+  get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
+  plot_coef()
 ```
 
 ### LASSO
 
 ```{r fig.height=20, fig.width=10}
 lasso_cv <- cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, type.measure = "deviance", family = "multinomial")
-lasso_cv %>% get_coef(tuning_parameter = lasso_cv$lambda.min) %>% plot_coef()
+lasso_cv %>% 
+  get_coef(tuning_parameter = lasso_cv$lambda.min) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
+  plot_coef()
 ```
 
 ### Elastic Net
@@ -106,7 +113,10 @@ elastic_cv <-
     trControl = trainControl("cv", number = 5),
     tuneLength = 10
     )
-elastic_cv$finalModel %>% get_coef(tuning_parameter = elastic_cv$bestTune$lambda) %>% plot_coef()
+elastic_cv$finalModel %>% 
+  get_coef(tuning_parameter = elastic_cv$bestTune$lambda) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
+  plot_coef()
 ```
 
 
@@ -121,6 +131,12 @@ tb_ridge$r %>% print_accurate_tb()
 
 tb_ridge$t %>% highlight_tb_count()
 tb_ridge$t %>% highlight_tb_percent()
+
+
+
+tb_ridge$t %>% 
+  as.data.frame() %>% 
+  arrange(desc(Freq))
 ```
 
 

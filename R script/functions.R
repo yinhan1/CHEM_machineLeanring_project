@@ -16,6 +16,7 @@ clean_data = function(data){
   return(data)
 }
 
+
 #-----------------------------------------------------------------------------------
 
 print_pca_importance = function(data, k){
@@ -364,7 +365,10 @@ repeat_B = function(k){
 
 collapse_data <- function(data){
   data %>% 
-    mutate(GroupCat = fct_other(factor(GroupCat), keep = c(16,6,3,5), other_level = 'Other'))
+    mutate(GroupCat = fct_other(factor(GroupCat), keep = c(6,3,5), other_level = 'Others'),
+           GroupCat = factor(GroupCat, 
+                             levels = c("3","5","6","Others"),
+                             labels = c("Cubic","Tilted","Hexagonal","Others")))
 }
 
   
