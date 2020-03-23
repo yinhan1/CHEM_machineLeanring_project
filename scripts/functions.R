@@ -1,5 +1,5 @@
 
-# Edited: 10/22/2019
+# Edited: 03/24/2020
 
 #-----------------------------------------------------------------------------------
 
@@ -12,7 +12,6 @@ clean_data = function(data){
   Gurl = data
   data[Gurl==-300] = NA
   data = na.omit(data)
-  
   return(data)
 }
 
@@ -365,10 +364,10 @@ repeat_B = function(k){
 
 collapse_data <- function(data){
   data %>% 
-    mutate(GroupCat = fct_other(factor(GroupCat), keep = c(6,3,5), other_level = 'Others'),
+    mutate(GroupCat = fct_other(factor(GroupCat), keep = c(3,5), other_level = 'Others'),
            GroupCat = factor(GroupCat, 
-                             levels = c("3","5","6","Others"),
-                             labels = c("Cubic","Tilted","Hexagonal","Others")))
+                             levels = c("3","5","Others"),
+                             labels = c("Cubic","Tilted","Others")))
 }
 
   
@@ -392,8 +391,8 @@ plot_coef <- function(coef_table){
   coef_table %>% 
     reshape2::melt(id.vars = "feature") %>% 
     ggplot(aes(x = feature, y = value, color = variable)) +
-    geom_point() +
-    geom_hline(yintercept = 0, size = 5, alpha = 0.3, color = "grey50") +
+    geom_point(size = 1) +
+    geom_hline(yintercept = 0, size = 3, alpha = 0.3, color = "grey50") +
     scale_color_nejm() +
     facet_wrap(variable~., nrow=1) +
     labs(x = "", y = "Coefficient", color = "Group") +

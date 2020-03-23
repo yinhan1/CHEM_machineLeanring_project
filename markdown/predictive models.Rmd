@@ -32,8 +32,9 @@ library(tidyverse)
 library(magrittr)
 library(ggsci)
 library(kableExtra)
+library(fastDummies)
 
-source("../R script/functions.R")
+source("../scripts/functions.R")
 ```
 
 
@@ -47,6 +48,7 @@ data <- clean_data(data) %>% collapse_data()
 # separate compound and group_cate from the predictors
 compound <- data$Compound
 group_cat <- data$GroupCat
+space_group <- data$SpaceGroup
 
 # create data constructed by first 13 PC's
 data <- select(data, -c("Compound","X","Z"))
@@ -61,7 +63,7 @@ folds <- caret::createFolds(1:nrow(data), k = 5, list = TRUE, returnTrain = FALS
 
 ```{r}
 library(glmnet)
-X = data[,-1] %>% as.matrix()
+X = data[,-1] %>% dummy_cols(select_columns = "SpaceGroup") %>% select(-c(SpaceGroupNumber, SpaceGroup)) %>% as.matrix()
 Y = data$GroupCat %>% as.matrix()
 ```
 
@@ -86,27 +88,27 @@ plot(model_lasso, xvar = "lambda", label = TRUE)
 
 ### Ridge 
 
-```{r fig.height=20, fig.width=10} 
+```{r fig.height=30, fig.width=10} 
 ridge_cv <- cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "deviance", family = "multinomial") 
 ridge_cv %>% 
   get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
-  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
+  select(feature, Cubic, Tilted, Others) %>% 
   plot_coef()
 ```
 
 ### LASSO
 
-```{r fig.height=20, fig.width=10}
+```{r fig.height=30, fig.width=10}
 lasso_cv <- cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, type.measure = "deviance", family = "multinomial")
 lasso_cv %>% 
   get_coef(tuning_parameter = lasso_cv$lambda.min) %>% 
-  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
+  select(feature, Cubic, Tilted, Others) %>% 
   plot_coef()
 ```
 
 ### Elastic Net
 
-```{r fig.height=20, fig.width=10}
+```{r fig.height=30, fig.width=10}
 library(caret)
 elastic_cv <- 
   train(GroupCat ~., data = data, method = "glmnet",
@@ -115,7 +117,7 @@ elastic_cv <-
     )
 elastic_cv$finalModel %>% 
   get_coef(tuning_parameter = elastic_cv$bestTune$lambda) %>% 
-  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
+  select(feature, Cubic, Tilted, Others) %>% 
   plot_coef()
 ```
 
