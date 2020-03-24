@@ -12,7 +12,8 @@ clean_data = function(data){
   Gurl = data
   data[Gurl==-300] = NA
   data = na.omit(data)
-  return(data)
+  
+  data[,!str_detect(names(data), "TiltAll_")] %>% return()
 }
 
 
@@ -298,7 +299,6 @@ get_nn_model = function(group_cat_dummy, data_pca){
   return(model)
 }
   
-
 #-----------------------------------------------------------------------------------
 
 get_nn_cv_rate = function(group_cat_dummy, data_pca){
@@ -359,7 +359,6 @@ repeat_B = function(k){
   return(dummy)
 }
 
-
 #-----------------------------------------------------------------------------------
 
 collapse_data <- function(data){
@@ -369,7 +368,6 @@ collapse_data <- function(data){
                              levels = c("3","5","Others"),
                              labels = c("Cubic","Tilted","Others")))
 }
-
   
 #-----------------------------------------------------------------------------------
 
@@ -380,16 +378,15 @@ get_coef <- function(cv_model, tuning_parameter){
     as.matrix() %>% as.data.frame() %>% 
     set_colnames(names(coef_packed)) %>% 
     rownames_to_column("feature") %>% 
+    arrange(feature) %>% 
     as.data.frame()
 }
-
- 
 
 #-----------------------------------------------------------------------------------
 
 plot_coef <- function(coef_table){
   coef_table %>% 
-    reshape2::melt(id.vars = "feature") %>% 
+    reshape2::melt(id.vars = c("feature","tag")) %>%
     ggplot(aes(x = feature, y = value, color = variable)) +
     geom_point(size = 1) +
     geom_hline(yintercept = 0, size = 5, alpha = 0.3, color = "grey50") +
@@ -401,6 +398,19 @@ plot_coef <- function(coef_table){
     coord_flip()
 }
 
+#-----------------------------------------------------------------------------------
+
+plot_coef_heatmap <- function(coef_table){
+  coef_table %>% 
+    reshape2::melt(id.vars = "feature") %>% 
+    mutate(text = paste0("predictor: ", feature, "\n", 
+                         "GroupCat: ", variable, "\n", 
+                         "Value: ", round(value, 4), "\n")) %>% 
+    ggplot(aes(x = variable, y = feature, fill = value, text = text)) +
+    geom_tile() +
+    scale_fill_gradient2(midpoint=0, low="blue", mid="white",
+                         high="red", space ="Lab")
+}
 
 #-----------------------------------------------------------------------------------
 
@@ -410,22 +420,19 @@ prediction_table <- function(alpha, lambda){
     Y_test = Y[id]; Y_train = Y[-id]
     model = glmnet(x = X_train, y = Y_train, alpha = alpha, family = "multinomial")
     Y_pred = predict(model, newx = X_test, type = "class", s = lambda)
-    table(factor(Y_pred, levels = levels(factor(Y))), factor(Y_test))
+    table(factor(Y_pred, levels = levels(factor(data$GroupCat))), 
+          factor(Y_test, levels = levels(factor(data$GroupCat))))
   }) 
   r = lapply(t, function(x) sum(diag(x))/sum(x)) %>% unlist()
   t = Reduce("+",t) %>% as.matrix()
   return(list(r=r, t=t))
 }
 
-
-
 #-----------------------------------------------------------------------------------
 
 print_accurate_tb <- function(r){
   t(r) %>% data.frame() %>% cbind(Mean = mean(r)) %>% kable(escape = F, booktabs = T) %>% kable_styling()
 }
-
-
 
 #-----------------------------------------------------------------------------------
 
@@ -439,8 +446,6 @@ highlight_tb_count <- function(m){
     kable(escape = F, booktabs = T) %>%
     kable_styling()
 }
-
-
 
 #-----------------------------------------------------------------------------------
 
@@ -456,11 +461,13 @@ highlight_tb_percent <- function(m){
     kable_styling()
 }
 
-
-
 #-----------------------------------------------------------------------------------
 
-
+remove_identical_cal <- function(data){
+  cols_to_remove <- apply(data, 2, function(x) length(unique(x)) == 1)
+  data[,!cols_to_remove]
+  # data[, !str_detect(names(data), c("X"))]
+}
 
 
 
