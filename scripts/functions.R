@@ -392,7 +392,7 @@ plot_coef <- function(coef_table){
     reshape2::melt(id.vars = "feature") %>% 
     ggplot(aes(x = feature, y = value, color = variable)) +
     geom_point(size = 1) +
-    geom_hline(yintercept = 0, size = 3, alpha = 0.3, color = "grey50") +
+    geom_hline(yintercept = 0, size = 5, alpha = 0.3, color = "grey50") +
     scale_color_nejm() +
     facet_wrap(variable~., nrow=1) +
     labs(x = "", y = "Coefficient", color = "Group") +

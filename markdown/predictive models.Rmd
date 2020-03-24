@@ -32,7 +32,6 @@ library(tidyverse)
 library(magrittr)
 library(ggsci)
 library(kableExtra)
-library(fastDummies)
 
 source("../scripts/functions.R")
 ```
@@ -51,7 +50,7 @@ group_cat <- data$GroupCat
 space_group <- data$SpaceGroup
 
 # create data constructed by first 13 PC's
-data <- select(data, -c("Compound","X","Z"))
+data <- select(data, -c("Compound","X","Z","SpaceGroup","SpaceGroupNumber"))
 # data_pca <- get_pc_space(data[,-1], k = 13) %>% scale() %>% data.frame()
 
 # split data into 5 folds for cross validation later
@@ -63,7 +62,7 @@ folds <- caret::createFolds(1:nrow(data), k = 5, list = TRUE, returnTrain = FALS
 
 ```{r}
 library(glmnet)
-X = data[,-1] %>% dummy_cols(select_columns = "SpaceGroup") %>% select(-c(SpaceGroupNumber, SpaceGroup)) %>% as.matrix()
+X = data[,-1] %>% as.matrix()
 Y = data$GroupCat %>% as.matrix()
 ```
 
@@ -93,6 +92,7 @@ ridge_cv <- cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "devia
 ridge_cv %>% 
   get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
   select(feature, Cubic, Tilted, Others) %>% 
+  filter(feature != "(Intercept)") %>% 
   plot_coef()
 ```
 
@@ -103,6 +103,7 @@ lasso_cv <- cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, type.measure = "devia
 lasso_cv %>% 
   get_coef(tuning_parameter = lasso_cv$lambda.min) %>% 
   select(feature, Cubic, Tilted, Others) %>% 
+  filter(feature != "(Intercept)") %>% 
   plot_coef()
 ```
 
@@ -118,6 +119,7 @@ elastic_cv <-
 elastic_cv$finalModel %>% 
   get_coef(tuning_parameter = elastic_cv$bestTune$lambda) %>% 
   select(feature, Cubic, Tilted, Others) %>% 
+  filter(feature != "(Intercept)") %>% 
   plot_coef()
 ```
 
@@ -133,12 +135,6 @@ tb_ridge$r %>% print_accurate_tb()
 
 tb_ridge$t %>% highlight_tb_count()
 tb_ridge$t %>% highlight_tb_percent()
-
-
-
-tb_ridge$t %>% 
-  as.data.frame() %>% 
-  arrange(desc(Freq))
 ```
 
 
