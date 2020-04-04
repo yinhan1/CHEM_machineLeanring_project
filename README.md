@@ -1,4 +1,4 @@
-# solid-state-chemistry
+# Machine learning on solid state chemistry
 
 Application of machine learning techniques in solid state chemistry for clustering and predicting Perovskites
 
