@@ -363,10 +363,10 @@ repeat_B = function(k){
 
 collapse_data <- function(data){
   data %>% 
-    mutate(GroupCat = fct_other(factor(GroupCat), keep = c(3,5), other_level = 'Others'),
+    mutate(GroupCat = fct_other(factor(GroupCat), keep = c(3,5,6), other_level = 'Others'),
            GroupCat = factor(GroupCat, 
-                             levels = c("3","5","Others"),
-                             labels = c("Cubic","Tilted","Others")))
+                             levels = c("3","5","6","Others"),
+                             labels = c("Cubic","Tilted","Hexagonal","Others")))
 }
   
 #-----------------------------------------------------------------------------------
@@ -386,7 +386,7 @@ get_coef <- function(cv_model, tuning_parameter){
 
 plot_coef <- function(coef_table){
   coef_table %>% 
-    reshape2::melt(id.vars = c("feature","tag")) %>%
+    reshape2::melt(id.vars = c("feature")) %>%
     ggplot(aes(x = feature, y = value, color = variable)) +
     geom_point(size = 1) +
     geom_hline(yintercept = 0, size = 5, alpha = 0.3, color = "grey50") +

@@ -1,0 +1,162 @@
+---
+title: "Predictive Models -- Others"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  bookdown::html_document2:
+    number_sections: no
+    fig_caption: true
+    toc: true
+    toc_float: true
+    toc_depth: 3
+    code_folding: hide
+header-includes:
+- \usepackage{graphicx}
+- \usepackage{float}
+editor_options:
+  chunk_output_type: inline
+---
+
+```{r setup knit, include=FALSE}
+knitr::opts_chunk$set(
+	fig.align = "center",
+	fig.pos = "H",
+	fig.width = 5,
+	fig.height = 3,
+	message = FALSE,
+	warning = FALSE,
+	external = TRUE,
+	echo = TRUE
+)
+
+library(tidyverse)
+library(magrittr)
+library(ggsci)
+library(kableExtra)
+
+source("../scripts/functions.R")
+```
+
+
+```{r data cleaning}
+# load raw data files
+# data <- read.csv("../data/filledDatabase.csv")[,-c(2:9,11:13)]
+data <- read.csv("../data/filledDatabaseNUMONLY_042620.csv")
+
+# clean data 
+data <- clean_data(data) %>% filter(!(GroupCat %in% c(3,5,6))) %>% 
+  mutate(GroupCat = ifelse(!(GroupCat %in% c(2,16)), "Others", GroupCat))
+
+# separate compound and group_cate from the predictors
+compound <- data$Compound
+group_cat <- data$GroupCat
+
+# prepare date for modeling
+data <- select(data, -c("Compound"))
+# data_pca <- get_pc_space(data[,-1], k = 13) %>% scale() %>% data.frame()
+
+# split data into 5 folds for cross validation later
+folds <- caret::createFolds(1:nrow(data), k = 5, list = TRUE, returnTrain = FALSE)
+```
+
+
+# Multinomial Regression
+
+```{r}
+library(glmnet)
+X = data[,-1] %>% as.matrix()
+Y = data$GroupCat %>% as.matrix()
+```
+
+## Shrinkage {.tabset}
+
+### Ridge
+
+```{r}
+model_ridge <- glmnet(x = X, y = Y, alpha = 0, family = "multinomial")
+plot(model_ridge, xvar = "lambda", label = TRUE)
+```
+
+### LASSO
+
+```{r}
+model_lasso <- glmnet(x = X, y = Y, alpha = 1, family = "multinomial")
+plot(model_lasso, xvar = "lambda", label = TRUE)
+```
+
+
+## Coefficient {.tabset}
+
+### Ridge 
+
+```{r fig.height=30, fig.width=10} 
+ridge_cv <- cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "deviance", family = "multinomial") 
+ridge_cv %>% 
+  get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
+  filter(feature != "(Intercept)") %>% 
+  plot_coef()
+```
+
+### LASSO
+
+```{r fig.height=30, fig.width=10}
+lasso_cv <- cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, type.measure = "deviance", family = "multinomial")
+lasso_cv %>% 
+  get_coef(tuning_parameter = lasso_cv$lambda.min) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
+  filter(feature != "(Intercept)") %>% 
+  plot_coef()
+```
+
+### Elastic Net
+
+```{r fig.height=30, fig.width=10}
+library(caret)
+elastic_cv <- 
+  train(GroupCat ~., data = data, method = "glmnet",
+    trControl = trainControl("cv", number = 5),
+    tuneLength = 10
+    )
+elastic_cv$finalModel %>% 
+  get_coef(tuning_parameter = elastic_cv$bestTune$lambda) %>% 
+  select(feature, Cubic, Tilted, Others) %>% 
+  filter(feature != "(Intercept)") %>% 
+  plot_coef()
+```
+
+
+
+## Accurate classification rate {.tabset}
+
+### Ridge
+
+```{r}
+tb_ridge = prediction_table(alpha = 0, lambda = ridge_cv$lambda.min) 
+tb_ridge$r %>% print_accurate_tb()
+
+tb_ridge$t %>% highlight_tb_count()
+tb_ridge$t %>% highlight_tb_percent()
+```
+
+
+### LASSO
+
+```{r} 
+tb_lasso = prediction_table(alpha = 1, lambda = lasso_cv$lambda.min) 
+tb_lasso$r %>% print_accurate_tb()
+
+tb_lasso$t %>% highlight_tb_count() 
+tb_lasso$t %>% highlight_tb_percent()
+```
+
+### Elastic Net
+
+```{r} 
+tb_elastic = prediction_table(alpha = elastic_cv$bestTune[[1]], lambda = elastic_cv$bestTune[[2]]) 
+tb_elastic$r %>% print_accurate_tb()
+
+tb_elastic$t %>% highlight_tb_count() 
+tb_elastic$t %>% highlight_tb_percent()
+```
+
+

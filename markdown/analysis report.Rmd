@@ -44,7 +44,7 @@ library(mclust)
 library(neuralnet)
 library(dendextend)  # color dendrogram 
 
-source("../R script/functions.R")
+source("R script/functions.R")
 ```
 
 

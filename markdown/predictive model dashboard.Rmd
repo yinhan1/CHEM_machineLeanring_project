@@ -31,7 +31,8 @@ source("../scripts/functions.R")
 
 ```{r}
 # load raw data files
-data <- read.csv("../data/filledDatabase.csv")[,-c(2:9,11:13)]
+# data <- read.csv("../data/filledDatabase.csv")[,-c(2:9,11:13)]
+data <- read.csv("../data/filledDatabaseNUMONLY_042620.csv")
 
 # clean data 
 data <- clean_data(data) %>% collapse_data()
@@ -39,10 +40,9 @@ data <- clean_data(data) %>% collapse_data()
 # separate compound and group_cate from the predictors
 compound <- data$Compound
 group_cat <- data$GroupCat
-space_group <- data$SpaceGroup
 
-# create data constructed by first 13 PC's
-data <- select(data, -c("Compound","Z","SpaceGroup","SpaceGroupNumber"))
+# prepare date for modeling
+data <- select(data, -c("Compound"))
 ```
 
 
@@ -65,25 +65,20 @@ ridge_cv <- cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "devia
 tb = 
   ridge_cv %>% 
   get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
-  select(feature, Cubic, Tilted, Others) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
   filter(feature != "(Intercept)") %>%
-  mutate(tag = rep(c(1,2,3), each=39))
+  mutate(tag = rep(c(1,2), c(32,32)))
 ```
 
-```{r}
-tb %>% filter(tag == 3) %>% plot_coef()
+
+```{r} 
+tb %>% filter(tag == 2) %>% select(-tag) %>% plot_coef()
 ```
 
 ### Ridge(2) 
 
 ```{r} 
-tb %>% filter(tag == 2) %>% plot_coef()
-```
-
-### Ridge(3) 
-
-```{r} 
-tb %>% filter(tag == 1) %>% plot_coef()
+tb %>% filter(tag == 1) %>% select(-tag) %>% plot_coef()
 ```
 
 
@@ -95,26 +90,20 @@ lasso_cv <- cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, type.measure = "devia
 tb = 
   lasso_cv %>% 
   get_coef(tuning_parameter = lasso_cv$lambda.min) %>% 
-  select(feature, Cubic, Tilted, Others) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
   filter(feature != "(Intercept)") %>%
-  mutate(tag = rep(c(1,2,3), each = 39))
+  mutate(tag = rep(c(1,2), c(32,32)))
 ```
 
 
-```{r}
-tb %>% filter(tag == 3) %>% plot_coef()
+```{r} 
+tb %>% filter(tag == 2) %>% select(-tag) %>% plot_coef()
 ```
 
 ### LASSO(2)
 
 ```{r}
-tb %>% filter(tag == 2) %>% plot_coef()
-```
-
-### LASSO(3)
-
-```{r}
-tb %>% filter(tag == 1) %>% plot_coef()
+tb %>% filter(tag == 1) %>% select(-tag) %>% plot_coef()
 ```
 
 ### Elastic Net(1)
@@ -128,25 +117,19 @@ elastic_cv <-
 tb = 
   elastic_cv$finalModel %>%
   get_coef(tuning_parameter = elastic_cv$bestTune$lambda) %>%
-  select(feature, Cubic, Tilted, Others) %>%
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>%
   filter(feature != "(Intercept)") %>%
-  mutate(tag = rep(c(1,2,3), each = 39))
+  mutate(tag = rep(c(1,2), c(32,32)))
 ```
 
 ```{r}
-tb %>% filter(tag == 3) %>% plot_coef()
+tb %>% filter(tag == 2) %>% select(-tag) %>% plot_coef()
 ```
 
 ### Elastic Net(2)
 
 ```{r}
-tb %>% filter(tag == 2) %>% plot_coef()
-```
-
-### Elastic Net(3)
-
-```{r}
-tb %>% filter(tag == 1) %>% plot_coef()
+tb %>% filter(tag == 1) %>% select(-tag) %>% plot_coef()
 ```
 
 
@@ -189,7 +172,7 @@ Anion O {data-icon="fa-signal"}
 
 ```{r}
 anion = "O"
-X = data[data$X == anion,-c(1,2)] %>% remove_identical_cal() %>% as.matrix()
+X = data[data$X == anion,-c(1)] %>% remove_identical_cal() %>% as.matrix()
 Y = data$GroupCat[data$X == anion] %>% as.matrix()
 folds <- createFolds(1:nrow(X), k = 5, list = TRUE, returnTrain = FALSE)
 ```

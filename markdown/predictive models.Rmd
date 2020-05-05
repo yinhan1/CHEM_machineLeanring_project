@@ -39,7 +39,8 @@ source("../scripts/functions.R")
 
 ```{r data cleaning}
 # load raw data files
-data <- read.csv("../data/filledDatabase.csv")[,-c(2:9,11:13)]
+# data <- read.csv("../data/filledDatabase.csv")[,-c(2:9,11:13)]
+data <- read.csv("../data/filledDatabaseNUMONLY_042620.csv")
 
 # clean data 
 data <- clean_data(data) %>% collapse_data()
@@ -47,10 +48,9 @@ data <- clean_data(data) %>% collapse_data()
 # separate compound and group_cate from the predictors
 compound <- data$Compound
 group_cat <- data$GroupCat
-space_group <- data$SpaceGroup
 
-# create data constructed by first 13 PC's
-data <- select(data, -c("Compound","Z","X","SpaceGroup","SpaceGroupNumber"))
+# prepare date for modeling
+data <- select(data, -c("Compound"))
 # data_pca <- get_pc_space(data[,-1], k = 13) %>% scale() %>% data.frame()
 
 # split data into 5 folds for cross validation later
@@ -91,7 +91,7 @@ plot(model_lasso, xvar = "lambda", label = TRUE)
 ridge_cv <- cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "deviance", family = "multinomial") 
 ridge_cv %>% 
   get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
-  select(feature, Cubic, Tilted, Others) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
   filter(feature != "(Intercept)") %>% 
   plot_coef()
 ```
@@ -102,7 +102,7 @@ ridge_cv %>%
 lasso_cv <- cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, type.measure = "deviance", family = "multinomial")
 lasso_cv %>% 
   get_coef(tuning_parameter = lasso_cv$lambda.min) %>% 
-  select(feature, Cubic, Tilted, Others) %>% 
+  select(feature, Cubic, Tilted, Hexagonal, Others) %>% 
   filter(feature != "(Intercept)") %>% 
   plot_coef()
 ```
