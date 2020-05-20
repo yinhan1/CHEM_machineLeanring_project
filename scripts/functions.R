@@ -12,8 +12,6 @@ clean_data = function(data){
   Gurl = data
   data[Gurl==-300] = NA
   data = na.omit(data)
-  
-  data[,!str_detect(names(data), "TiltAll_")] %>% return()
 }
 
 
