@@ -1,11 +1,10 @@
-
-
 library(tidyverse)
 library(magrittr)
 library(ggsci)
 library(kableExtra)
 
 library(glmnet)
+library(caret)
 
 library(plotly)
 
@@ -32,6 +31,7 @@ subset <- data %>% filter(X == "O")
 table(subset$GroupCat) %>% sort(decreasing = TRUE)
 
 subset <- data %>% filter(X == "O") %>% filter(GroupCat != "NCOT") %>% droplevels()
+
 X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
 Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
 folds <- caret::createFolds(1:nrow(X), k = 5, list = TRUE, returnTrain = FALSE)
@@ -42,19 +42,42 @@ pca <- prcomp(X, scale = TRUE)
 summary(pca) 
 X_PC <- pca$x[,1:17] %>% as.matrix()
 
-data.frame(Compound = subset$Compound, 
+PC_point <- data.frame(Compound = subset$Compound, 
            Cluster = as.character(subset$GroupCat), 
-           X_PC) %>%
-  plot_ly(x = ~PC1, 
-          y = ~PC2, 
-          z = ~PC3, 
-          color = ~Cluster, 
-          colors = "Dark2", 
-          text = ~Compound) %>%
-  add_markers(marker = list(size = 7, opacity = 0.6)) %>%
-  layout(scene = list(xaxis = list(title = 'PC1'),
-                      yaxis = list(title = 'PC2'),
-                      zaxis = list(title = 'PC3')))
+           X_PC)
+
+PC <- pca$rotation %>%
+  as.data.frame() %>% 
+  select(PC1,PC2,PC3) %>% 
+  rownames_to_column("variable") %>% 
+  mutate(tag = "end",
+         contribution = PC1^2 + PC2^2 + PC3^2)
+PC[,2:4] <- PC[,2:4]*20
+PC_initial <- PC %>% mutate(tag = "start")
+PC_initial[,2:4] = 0
+PC_arrow <- bind_rows(PC, PC_initial)
+
+PC_arrow %>% 
+  group_by(variable) %>% 
+  plot_ly() %>% 
+  add_trace(
+    x = ~PC1, 
+    y = ~PC2, 
+    z = ~PC3,
+    color = ~contribution,
+    text = ~variable,
+    type = 'scatter3d', mode = 'lines', opacity = 1, 
+    line = list(width = 6, reverscale = FALSE)
+  ) %>% 
+  add_markers(
+    data = PC_point,
+    x = ~PC1, 
+    y = ~PC2, 
+    z = ~PC3, 
+    color = ~Cluster, 
+    colors = "Dark2", 
+    text = ~Compound,
+    opacity = 0.9)
 
 
 #### -------------   step 1: ridge   ------------- #### 
@@ -79,7 +102,6 @@ tb_lasso$t[,-5] %>% highlight_tb_percent()
 
 
 #### -------------   step 3: elastic net   ------------- #### 
-library(caret)
 elastic_cv <-
   train(GroupCat ~., data = data.frame(X, GroupCat=Y), method = "glmnet",
         trControl = trainControl("cv", number = 5),
@@ -90,20 +112,6 @@ tb_elastic$r %>% print_accurate_tb()
 
 tb_elastic$t %>% highlight_tb_count()
 tb_elastic$t[,-5] %>% highlight_tb_percent()
-
-
-library(rpart)
-library(rpart.plot)
-train = sample(1:nrow(X), nrow(X)*0.8)
-fit <- rpart(GroupCat ~., 
-             data = data.frame(X[train,], GroupCat=Y[train]), method = 'class')
-rpart.plot(fit)
-
-#### -------------   step 4: neural nets   ------------- #### 
-
-
-
-#### -------------   step 5: gaussian process   ------------- #### 
 
 
 
