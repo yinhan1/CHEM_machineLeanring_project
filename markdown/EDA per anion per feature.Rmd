@@ -1,0 +1,120 @@
+---
+title: "EDA on Anion Cl"
+author: "Han Yin"
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output: pdf_document
+---
+
+```{r setup knit, include=FALSE}
+knitr::opts_chunk$set(
+	fig.align = "center",
+	fig.pos = "H",
+	fig.width = 5,
+	fig.height = 3,
+	message = FALSE,
+	warning = FALSE,
+	external = TRUE,
+	echo = FALSE
+)
+
+library(tidyverse)
+library(magrittr)
+library(ggsci)
+library(kableExtra)
+library(plotly)
+
+source("../scripts/functions.R")
+```
+
+
+```{r}
+data <- 
+  read.csv("../data/filledDatabaseNUMONLY_051820.csv") %>% 
+  clean_data() %>% 
+  filter(GroupCat %in% c(2,3:6)) %>% 
+  mutate(GroupCat = recode(GroupCat, 
+                           "2" = "LiNb03", 
+                           "4" = "NCOT",
+                           "3" = "Cubic", 
+                           "5" = "Titlted",
+                           "6" = "Hexagonal"),
+         GroupCat = factor(GroupCat, levels = c("Cubic","Tilted","Hexagonal","LiNb03","NCOT")))
+
+table(data$X) %>% 
+  sort(decreasing = TRUE) %>% 
+  t() %>% 
+  kable("latex", longtable = T, booktabs = T, caption = "Sample sizes of anion groups") %>% 
+  kable_styling()
+
+anion_list <- table(data$X) %>% sort(decreasing = TRUE) %>% names()
+```
+
+```{r}
+k <- 3
+subset <- data %>% filter(X == anion_list[k])
+table(subset$GroupCat) %>% 
+  sort(decreasing = TRUE) %>% 
+  t() %>% 
+  kable("latex", longtable = T, booktabs = T,
+        caption = paste("Sample sizes of target categories in Anion", anion_list[k])) %>% 
+  kable_styling()
+```
+
+
+
+```{r}
+#### -------------   step 0: EDA   ------------- #### 
+subset = subset %>% drop_na()
+X <- subset[,-c(1:4)]
+
+get_bars <- function(index){
+  data.frame(
+    group = subset$GroupCat,
+    feature = X[,index]
+  ) %>% 
+    ggplot(aes(x = feature, fill = as.factor(group))) +
+    geom_histogram(stat = "bin", bins = 30, show.legend = FALSE) +
+    facet_wrap(group~., scales = "free_y", ncol = 1) + 
+    scale_fill_jco() +
+    theme_minimal() + 
+    labs(x = names(X)[index], fill = 'Group') 
+}
+
+library(cowplot)
+layout_bars <- function(index1, index2, index3){
+  plot_grid(
+    get_bars(index1),
+    get_bars(index2),
+    get_bars(index3),
+    nrow = 1)
+}
+```
+
+
+
+```{r fig.height=5, fig.width=12}
+layout_bars(1, 2, 3)
+layout_bars(4, 5, 6)
+layout_bars(7, 8, 9)
+layout_bars(10, 11, 12)
+layout_bars(13, 14, 15)
+layout_bars(16, 17, 18)
+layout_bars(19, 20, 21)
+layout_bars(22, 23, 24)
+layout_bars(25, 26, 27)
+layout_bars(28, 29, 30)
+layout_bars(31, 32, 33)
+layout_bars(34, 35, 36)
+layout_bars(37, 38, 39)
+layout_bars(40, 41, 42)
+layout_bars(43, 44, 45)
+layout_bars(46, 47, 48)
+layout_bars(49, 50, 51)
+layout_bars(52, 53, 54)
+layout_bars(55, 56, 57)
+layout_bars(58, 59, 60)
+layout_bars(61, 62, 63)
+```
+
+
+
