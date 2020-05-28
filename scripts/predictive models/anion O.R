@@ -66,7 +66,7 @@ PC_arrow %>%
     type = 'scatter3d', mode = 'lines', opacity = 1, 
     line = list(width = 6, reverscale = FALSE)
   ) %>% 
-  add_markers(
+  add_trace(
     data = PC_point,
     x = ~PC1, 
     y = ~PC2, 
@@ -74,8 +74,8 @@ PC_arrow %>%
     color = ~Cluster, 
     colors = "Dark2", 
     text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
     opacity = 0.9)
-
 
 #### -------------   step 1: ridge   ------------- #### 
 subset <- data %>% filter(X == "O") %>% filter(GroupCat != "NCOT") %>% droplevels()
@@ -102,6 +102,7 @@ tb_lasso$t[,-5] %>% highlight_tb_percent()
 
 lasso_cv %>% get_coef(tuning_parameter = lasso_cv$lambda.min) %>% View()
 
+
 #### -------------   step 3: elastic net   ------------- #### 
 elastic_cv <-
   train(GroupCat ~., data = data.frame(X, GroupCat = Y), method = "glmnet",
@@ -114,9 +115,7 @@ tb_elastic$t[,-5] %>% highlight_tb_count()
 tb_elastic$t[,-5] %>% highlight_tb_percent()
 
 
-#### -------------   step 4: boostrap on lasso coefficients   ------------- #### 
-
-#### -------------   step 5: GBM   ------------- #### 
+#### -------------   step 4: GBM   ------------- #### 
 library(gbm)
 gbm_cv <- gbm(GroupCat~., data = subset[,-c(1:3)], 
               shrinkage = 0.01, distribution = "multinomial", 
@@ -136,6 +135,37 @@ model2
 tb = confusionMatrix(model2)$table %>% as.matrix()
 tb_sum = colSums(tb)  
 tb / tb_sum
+
+#### -------------   step 5: which we predict it wrong   ------------- #### 
+
+subset <- data %>% filter(X == "O")
+X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
+Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
+
+top3 <- c("ToleranceBVP","IonizationPotentialofA","CrystalRadiusofA")
+X_top3 <- X[,top3]
+
+data.frame(
+  Compound = subset$Compound, 
+  Cluster = as.character(subset$GroupCat), 
+  X_top3
+  ) %>% 
+  plot_ly() %>% 
+  add_trace(
+    x = ~ToleranceBVP, 
+    y = ~IonizationPotentialofA, 
+    z = ~CrystalRadiusofA, 
+    color = ~Cluster, 
+    colors = "Paired", 
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    opacity = 0.8
+  )
+
+
+
+
+
 
 #### =====================  Anion F  ===================== #### 
 subset <- data %>% filter(X == "F")
@@ -232,10 +262,7 @@ elastic_cv$finalModel %>%
   get_coef(tuning_parameter = elastic_cv$bestTune$lambda) %>% 
   View()
 
-
-#### -------------   step 4: boostrap on lasso coefficients   ------------- #### 
-
-#### -------------   step 5: GBM   ------------- #### 
+#### -------------   step 4: GBM   ------------- #### 
 gbm_cv <- gbm(GroupCat~., data = subset[,-c(1:3)], 
               shrinkage = 0.01, distribution = "multinomial", 
               cv.folds = 5, n.trees = 3000, verbose = F)
@@ -254,7 +281,29 @@ tb = confusionMatrix(model2)$table %>% as.matrix()
 tb_sum = colSums(tb)  
 tb / tb_sum
 
+#### -------------   step 5: what we predict wrong  ------------- #### 
+subset <- data %>% filter(X == "F")
+X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
+Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
 
+top3 <- c("ToleranceBVP","DensityatSpecofA","CrystalRadiusofBprime")
+X_top3 <- X[,top3]
 
+data.frame(
+  Compound = subset$Compound, 
+  Cluster = as.character(subset$GroupCat), 
+  X_top3
+) %>% 
+  plot_ly() %>% 
+  add_trace(
+    x = ~ToleranceBVP, 
+    y = ~DensityatSpecofA, 
+    z = ~CrystalRadiusofBprime, 
+    color = ~Cluster, 
+    colors = "Paired", 
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    opacity = 0.8
+  )
 
 
