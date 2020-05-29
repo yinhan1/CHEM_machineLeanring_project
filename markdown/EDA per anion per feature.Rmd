@@ -26,6 +26,9 @@ library(plotly)
 source("../scripts/functions.R")
 ```
 
+```{r}
+k <- 3
+```
 
 ```{r}
 data <- 
@@ -36,21 +39,23 @@ data <-
                            "2" = "LiNb03", 
                            "4" = "NCOT",
                            "3" = "Cubic", 
-                           "5" = "Titlted",
+                           "5" = "Tilted",
                            "6" = "Hexagonal"),
-         GroupCat = factor(GroupCat, levels = c("Cubic","Tilted","Hexagonal","LiNb03","NCOT")))
+         GroupCat = factor(
+           GroupCat, 
+           levels = c("Cubic","Tilted","Hexagonal","LiNb03","NCOT")))
 
 table(data$X) %>% 
   sort(decreasing = TRUE) %>% 
   t() %>% 
-  kable("latex", longtable = T, booktabs = T, caption = "Sample sizes of anion groups") %>% 
+  kable("latex", longtable = T, booktabs = T, 
+        caption = "Sample sizes of anion groups") %>% 
   kable_styling()
 
 anion_list <- table(data$X) %>% sort(decreasing = TRUE) %>% names()
 ```
 
 ```{r}
-k <- 3
 subset <- data %>% filter(X == anion_list[k])
 table(subset$GroupCat) %>% 
   sort(decreasing = TRUE) %>% 

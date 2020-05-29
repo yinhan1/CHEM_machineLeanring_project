@@ -6,6 +6,8 @@ library(kableExtra)
 library(glmnet)
 library(caret)
 
+library(gbm)
+
 library(plotly)
 
 source("scripts/functions.R")
@@ -33,7 +35,7 @@ table(subset$GroupCat) %>% sort(decreasing = TRUE)
 X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
 Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
 
-#### -------------   step 0: PCA   ------------- #### 
+#### -------------   section 0: PCA   ------------- #### 
 
 pca <- prcomp(X, scale = TRUE)
 summary(pca) 
@@ -77,72 +79,94 @@ PC_arrow %>%
     type = 'scatter3d', mode = 'markers',
     opacity = 0.9)
 
-#### -------------   step 1: ridge   ------------- #### 
-subset <- data %>% filter(X == "O") %>% filter(GroupCat != "NCOT") %>% droplevels()
-X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
-Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
+#### -------------   section 1: multinomial reg   ------------- #### 
+subset2 <- data %>% filter(X == "O") %>% filter(GroupCat != "NCOT") %>% droplevels()
+X <- subset2[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
+Y <- subset2$GroupCat %>% droplevels() %>% as.matrix()
 set.seed(2020)
 folds <- caret::createFolds(1:nrow(X), k = 5, list = TRUE, returnTrain = FALSE)
 
-ridge_cv = cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, 
-                     type.measure = "deviance", family = "multinomial")
+#### ridge
+ridge_cv = cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "deviance", family = "multinomial")
 tb_ridge = prediction_table(alpha = 0, lambda = ridge_cv$lambda.min) 
 tb_ridge$r %>% print_accurate_tb()
 tb_ridge$t[,-5] %>% highlight_tb_count()
 tb_ridge$t[,-5] %>% highlight_tb_percent()
 
-
-#### -------------   step 2: lasso   ------------- #### 
-lasso_cv = cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, 
-                     type.measure = "deviance", family = "multinomial")
-tb_lasso = prediction_table(alpha = 0, lambda = lasso_cv$lambda.min) 
+#### lasso 
+lasso_cv = cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, type.measure = "deviance", family = "multinomial")
+tb_lasso = prediction_table(alpha = 1, lambda = lasso_cv$lambda.min) 
 tb_lasso$r %>% print_accurate_tb()
 tb_lasso$t[,-5] %>% highlight_tb_count()
 tb_lasso$t[,-5] %>% highlight_tb_percent() 
 
-lasso_cv %>% get_coef(tuning_parameter = lasso_cv$lambda.min) %>% View()
-
-
-#### -------------   step 3: elastic net   ------------- #### 
+#### elastic net  
 elastic_cv <-
   train(GroupCat ~., data = data.frame(X, GroupCat = Y), method = "glmnet",
-        trControl = trainControl("cv", number = 5),
-        tuneLength = 10)
-tb_elastic = prediction_table(alpha = elastic_cv$bestTune[[1]], 
-                              lambda = elastic_cv$bestTune[[2]])
+        trControl = trainControl("cv", number = 5), tuneLength = 10)
+tb_elastic = prediction_table(alpha = elastic_cv$bestTune[[1]], lambda = elastic_cv$bestTune[[2]])
 tb_elastic$r %>% print_accurate_tb()
 tb_elastic$t[,-5] %>% highlight_tb_count()
 tb_elastic$t[,-5] %>% highlight_tb_percent()
 
+#### CI for multinomial reg
+B <- 2000
+cubic = hexagonal = linb = tilted = data.frame(Intercept = 0, t(X[1,]))
+for (i in 1:B){
+  rows_to_take <- sample(nrow(X), nrow(X))
+  ridge_cv = cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "deviance", family = "multinomial")
+  tb_coef <- ridge_cv %>% get_coef(tuning_parameter = ridge_cv$lambda.min)
+  # lasso_cv <- cv.glmnet(x = X[rows_to_take,], y = Y[rows_to_take], alpha = 1, nfolds = 5, type.measure = "deviance", family = "multinomial")
+  # tb_coef <- lasso_cv %>% get_coef(tuning_parameter = lasso_cv$lambda.min)
+  cubic[i,] <- tb_coef[,2]
+  hexagonal[i,] <-  tb_coef[,3]
+  linb[i,] <-  tb_coef[,4]
+  tilted[i,] <-  tb_coef[,5]
+}
 
-#### -------------   step 4: GBM   ------------- #### 
-library(gbm)
-gbm_cv <- gbm(GroupCat~., data = subset[,-c(1:3)], 
+t1 = apply(cubic, 2, function(col) quantile(col, probs = c(0.025,0.975)))
+t2 = apply(hexagonal, 2, function(col) quantile(col, probs = c(0.025,0.975)))
+t3 = apply(linb, 2, function(col) quantile(col, probs = c(0.025,0.975)))
+t4 = apply(tilted, 2, function(col) quantile(col, probs = c(0.025,0.975)))
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+#### -------------   section 2: GBM   ------------- #### 
+gbm_cv <- gbm(GroupCat~., data = subset2[,-c(1:3)], 
               shrinkage = 0.01, distribution = "multinomial", 
               cv.folds = 5, n.trees = 3000, verbose = F)
 best.iter = gbm.perf(gbm_cv, method="cv")
-summary(gbm_cv) %>% View()
 
+summary(gbm_cv) %>% View
 
 fitControl = trainControl(method = "cv", number = 5, returnResamp = "all")
-model2 = train(GroupCat~., data = subset[,-c(1:3)], method = "gbm",
+model2 = train(GroupCat~., data = subset2[,-c(1:3)], method = "gbm",
                distribution = "multinomial", trControl = fitControl, verbose=F, 
                tuneGrid = data.frame(.n.trees = best.iter, 
-                                     .shrinkage=0.01, 
-                                     .interaction.depth=1, 
-                                     .n.minobsinnode=1))
+                                     .shrinkage = 0.01, 
+                                     .interaction.depth = 1, 
+                                     .n.minobsinnode = 1))
 model2
 tb = confusionMatrix(model2)$table %>% as.matrix()
 tb_sum = colSums(tb)  
 tb / tb_sum
 
+
 #### -------------   step 5: which we predict it wrong   ------------- #### 
-
-subset <- data %>% filter(X == "O")
-X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
-Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
-
 top3 <- c("ToleranceBVP","IonizationPotentialofA","CrystalRadiusofA")
+X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
 X_top3 <- X[,top3]
 
 data.frame(
@@ -164,10 +188,8 @@ data.frame(
 
 
 
-
-
-
 #### =====================  Anion F  ===================== #### 
+
 subset <- data %>% filter(X == "F")
 table(subset$GroupCat) %>% sort(decreasing = TRUE)
 X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
@@ -217,12 +239,12 @@ PC_arrow %>%
     opacity = 0.9)
 
 #### -------------   step 1: ridge   ------------- #### 
-subset <- data %>% 
+subset2 <- data %>% 
   filter(X == "F") %>% 
   filter(!(GroupCat %in% c("LiNb03","NCOT"))) %>% 
   droplevels()
-X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
-Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
+X <- subset2[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
+Y <- subset2$GroupCat %>% droplevels() %>% as.matrix()
 
 set.seed(2020)
 folds <- caret::createFolds(1:nrow(X), k = 5, list = TRUE, returnTrain = FALSE)
@@ -238,7 +260,7 @@ tb_ridge$t[,-(4:5)] %>% highlight_tb_percent()
 #### -------------   step 2: lasso   ------------- #### 
 lasso_cv = cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, 
                      type.measure = "deviance", family = "multinomial")
-tb_lasso = prediction_table(alpha = 0, lambda = lasso_cv$lambda.min) 
+tb_lasso = prediction_table(alpha = 1, lambda = lasso_cv$lambda.min) 
 tb_lasso$r %>% print_accurate_tb()
 tb_lasso$t[,-(4:5)] %>% highlight_tb_count()
 tb_lasso$t[,-(4:5)] %>% highlight_tb_percent() 
@@ -263,14 +285,14 @@ elastic_cv$finalModel %>%
   View()
 
 #### -------------   step 4: GBM   ------------- #### 
-gbm_cv <- gbm(GroupCat~., data = subset[,-c(1:3)], 
+gbm_cv <- gbm(GroupCat~., data = subset2[,-c(1:3)], 
               shrinkage = 0.01, distribution = "multinomial", 
               cv.folds = 5, n.trees = 3000, verbose = F)
 best.iter = gbm.perf(gbm_cv, method="cv")
 summary(gbm_cv) %>% View()
 
 fitControl = trainControl(method = "cv", number = 5, returnResamp = "all")
-model2 = train(GroupCat~., data = subset[,-c(1:3)], method = "gbm",
+model2 = train(GroupCat~., data = subset2[,-c(1:3)], method = "gbm",
                distribution = "multinomial", trControl = fitControl, verbose=F, 
                tuneGrid = data.frame(.n.trees = best.iter, 
                                      .shrinkage=0.01, 
@@ -282,7 +304,6 @@ tb_sum = colSums(tb)
 tb / tb_sum
 
 #### -------------   step 5: what we predict wrong  ------------- #### 
-subset <- data %>% filter(X == "F")
 X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
 Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
 
