@@ -468,7 +468,30 @@ remove_identical_cal <- function(data){
 }
 
 
+#-----------------------------------------------------------------------------------
 
+resample = function(index_list){
+  index_list[sample(length(index_list))]
+}
+
+get_samples <- function(Y){
+  group_cat = unique(Y)
+  lapply(group_cat, function(cat_i) (1:nrow(X))[Y == cat_i] %>% resample()) %>% unlist()
+  }
+
+
+#-----------------------------------------------------------------------------------
+
+
+get_CIbound <- function(data, group_name){
+  apply(data, 2, function(col) quantile(col, probs = c(0.025,0.975))) %>% 
+    t() %>% 
+    as.data.frame() %>% 
+    set_colnames(c("lower","upper")) %>% 
+    rownames_to_column("feature") %>% 
+    mutate(group_cat = group_name) %>%
+    select(group_cat, feature, lower, upper)
+}
 
 
 

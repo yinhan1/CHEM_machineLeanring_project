@@ -2,13 +2,12 @@ library(tidyverse)
 library(magrittr)
 library(ggsci)
 library(kableExtra)
+library(plotly)
 
 library(glmnet)
 library(caret)
 
 library(gbm)
-
-library(plotly)
 
 source("scripts/functions.R")
 
@@ -24,18 +23,31 @@ data <-
                            "5" = "Tilted",
                            "6" = "Hexagonal"),
          GroupCat = factor(GroupCat, 
-                           levels = c("Cubic","Tilted","Hexagonal","LiNb03","NCOT")))
-
+                           levels = c("Cubic",
+                                      "Tilted",
+                                      "Hexagonal",
+                                      "LiNb03",
+                                      "NCOT")))
 table(data$X) %>% sort(decreasing = TRUE)
 
-#### =====================  Anion O  ===================== #### 
+
+
+#### ================================  Anion O  ================================ #### 
+
 
 subset <- data %>% filter(X == "O")
 table(subset$GroupCat) %>% sort(decreasing = TRUE)
-X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
-Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
 
-#### -------------   section 0: PCA   ------------- #### 
+X <- subset[,-c(1:4)] %>% 
+  remove_identical_cal() %>% 
+  as.matrix()
+Y <- subset$GroupCat %>% 
+  droplevels() %>% 
+  as.matrix()
+
+
+#### ---------------------------   section 0: PCA   --------------------------- #### 
+
 
 pca <- prcomp(X, scale = TRUE)
 summary(pca) 
@@ -52,11 +64,11 @@ PC <- pca$rotation %>%
   mutate(tag = "end",
          contribution = PC1^2 + PC2^2 + PC3^2)
 PC[,2:4] <- PC[,2:4]*30
+
 PC_initial <- PC %>% mutate(tag = "start")
 PC_initial[,2:4] = 0
-PC_arrow <- bind_rows(PC, PC_initial)
 
-PC_arrow %>% 
+bind_rows(PC, PC_initial) %>% 
   group_by(variable) %>% 
   plot_ly() %>% 
   add_trace(
@@ -79,100 +91,148 @@ PC_arrow %>%
     type = 'scatter3d', mode = 'markers',
     opacity = 0.9)
 
-#### -------------   section 1: multinomial reg   ------------- #### 
-subset2 <- data %>% filter(X == "O") %>% filter(GroupCat != "NCOT") %>% droplevels()
+
+
+#### --------------------   section 1: multinomial reg   -------------------- #### 
+
+subset2 <- data %>% 
+  filter(X == "O") %>% 
+  filter(GroupCat != "NCOT") %>% 
+  droplevels()
+
 X <- subset2[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
 Y <- subset2$GroupCat %>% droplevels() %>% as.matrix()
+
 set.seed(2020)
-folds <- caret::createFolds(1:nrow(X), k = 5, list = TRUE, returnTrain = FALSE)
+folds <- createFolds(1:nrow(X), k = 5, list = TRUE, returnTrain = FALSE)
 
 #### ridge
-ridge_cv = cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "deviance", family = "multinomial")
-tb_ridge = prediction_table(alpha = 0, lambda = ridge_cv$lambda.min) 
+
+ridge_cv = cv.glmnet(x = X, y = Y, alpha = 0, 
+                     nfolds = 5, 
+                     type.measure = "deviance", 
+                     family = "multinomial")
+
+tb_ridge = prediction_table(alpha = 0, 
+                            lambda = ridge_cv$lambda.min) 
 tb_ridge$r %>% print_accurate_tb()
 tb_ridge$t[,-5] %>% highlight_tb_count()
 tb_ridge$t[,-5] %>% highlight_tb_percent()
 
 #### lasso 
-lasso_cv = cv.glmnet(x = X, y = Y, alpha = 1, nfolds = 5, type.measure = "deviance", family = "multinomial")
-tb_lasso = prediction_table(alpha = 1, lambda = lasso_cv$lambda.min) 
+
+lasso_cv = cv.glmnet(x = X, y = Y, alpha = 1, 
+                     nfolds = 5, 
+                     type.measure = "deviance", 
+                     family = "multinomial")
+
+tb_lasso = prediction_table(alpha = 1, 
+                            lambda = lasso_cv$lambda.min) 
 tb_lasso$r %>% print_accurate_tb()
 tb_lasso$t[,-5] %>% highlight_tb_count()
 tb_lasso$t[,-5] %>% highlight_tb_percent() 
 
 #### elastic net  
+
 elastic_cv <-
-  train(GroupCat ~., data = data.frame(X, GroupCat = Y), method = "glmnet",
-        trControl = trainControl("cv", number = 5), tuneLength = 10)
-tb_elastic = prediction_table(alpha = elastic_cv$bestTune[[1]], lambda = elastic_cv$bestTune[[2]])
+  train(GroupCat ~., data = data.frame(X, GroupCat = Y), 
+        method = "glmnet",
+        trControl = trainControl("cv", number = 5), 
+        tuneLength = 10)
+
+tb_elastic = prediction_table(alpha = elastic_cv$bestTune[[1]], 
+                              lambda = elastic_cv$bestTune[[2]])
 tb_elastic$r %>% print_accurate_tb()
 tb_elastic$t[,-5] %>% highlight_tb_count()
 tb_elastic$t[,-5] %>% highlight_tb_percent()
 
+
 #### CI for multinomial reg
-B <- 2000
-cubic = hexagonal = linb = tilted = data.frame(Intercept = 0, t(X[1,]))
+
+B <- 5000
+cubic = 
+  hexagonal = 
+  linb = 
+  tilted = 
+  data.frame(Intercept = 0, t(X[1,]))
+
 for (i in 1:B){
-  rows_to_take <- sample(nrow(X), nrow(X))
-  ridge_cv = cv.glmnet(x = X, y = Y, alpha = 0, nfolds = 5, type.measure = "deviance", family = "multinomial")
-  tb_coef <- ridge_cv %>% get_coef(tuning_parameter = ridge_cv$lambda.min)
-  # lasso_cv <- cv.glmnet(x = X[rows_to_take,], y = Y[rows_to_take], alpha = 1, nfolds = 5, type.measure = "deviance", family = "multinomial")
-  # tb_coef <- lasso_cv %>% get_coef(tuning_parameter = lasso_cv$lambda.min)
+  rows_to_take <- get_samples(Y)
+  ridge_cv = cv.glmnet(x = X[rows_to_take,], 
+                       y = Y[rows_to_take], 
+                       alpha = 0, 
+                       nfolds = 5, 
+                       type.measure = "deviance", 
+                       family = "multinomial")
+  
+  tb_coef <- ridge_cv %>% 
+    get_coef(tuning_parameter = ridge_cv$lambda.min)
+  
   cubic[i,] <- tb_coef[,2]
   hexagonal[i,] <-  tb_coef[,3]
   linb[i,] <-  tb_coef[,4]
   tilted[i,] <-  tb_coef[,5]
 }
 
-t1 = apply(cubic, 2, function(col) quantile(col, probs = c(0.025,0.975)))
-t2 = apply(hexagonal, 2, function(col) quantile(col, probs = c(0.025,0.975)))
-t3 = apply(linb, 2, function(col) quantile(col, probs = c(0.025,0.975)))
-t4 = apply(tilted, 2, function(col) quantile(col, probs = c(0.025,0.975)))
+#### plot CI 
+bind_rows(
+  get_CIbound(cubic, "Cubic"),
+  get_CIbound(hexagonal, "Hexagonal"),
+  get_CIbound(linb, "LiNb03"),
+  get_CIbound(tilted, "Tilted")
+) %>% 
+  full_join(
+    ridge_cv %>% 
+      get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
+      reshape2::melt(id.vars = "feature", value.name = "est", variable.name = "group_cat") %>%
+      mutate(feature = recode(feature, "(Intercept)" = "Intercept"))
+  ) %>%
+  ggplot(aes(x = feature, y = est, color = group_cat)) +
+  geom_point(size = 1) +
+  geom_errorbar(aes(ymin = lower, ymax = upper), alpha = 0.5, width = 0.5) +
+  geom_hline(yintercept = 0, size = 1, alpha = 0.7, color = "grey50") +
+  scale_color_nejm() +
+  facet_wrap(group_cat~., nrow=1) +
+  labs(x = "", y = "Coefficient", color = "Group") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 90)) +
+  coord_flip()
+  
 
 
+#### -------------------------   section 2: GBM   ------------------------- #### 
 
-
-
-
-
-
-
-
-
-
-
-
-
-#### -------------   section 2: GBM   ------------- #### 
 gbm_cv <- gbm(GroupCat~., data = subset2[,-c(1:3)], 
               shrinkage = 0.01, distribution = "multinomial", 
               cv.folds = 5, n.trees = 3000, verbose = F)
 best.iter = gbm.perf(gbm_cv, method="cv")
 
-summary(gbm_cv) %>% View
+summary(gbm_cv) %>% View()
 
 fitControl = trainControl(method = "cv", number = 5, returnResamp = "all")
-model2 = train(GroupCat~., data = subset2[,-c(1:3)], method = "gbm",
-               distribution = "multinomial", trControl = fitControl, verbose=F, 
+model2 = train(GroupCat~., data = subset2[,-c(1:3)], 
+               method = "gbm",
+               distribution = "multinomial", 
+               trControl = fitControl, verbose = F, 
                tuneGrid = data.frame(.n.trees = best.iter, 
                                      .shrinkage = 0.01, 
                                      .interaction.depth = 1, 
                                      .n.minobsinnode = 1))
-model2
 tb = confusionMatrix(model2)$table %>% as.matrix()
 tb_sum = colSums(tb)  
 tb / tb_sum
 
 
-#### -------------   step 5: which we predict it wrong   ------------- #### 
-top3 <- c("ToleranceBVP","IonizationPotentialofA","CrystalRadiusofA")
-X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
-X_top3 <- X[,top3]
 
+#### -------------   section 3: which we predict it wrong   ------------- #### 
+
+top3 <- c("ToleranceBVP", "IonizationPotentialofA", "CrystalRadiusofA")
+
+X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
 data.frame(
   Compound = subset$Compound, 
   Cluster = as.character(subset$GroupCat), 
-  X_top3
+  X[,top3]
   ) %>% 
   plot_ly() %>% 
   add_trace(
@@ -188,14 +248,14 @@ data.frame(
 
 
 
-#### =====================  Anion F  ===================== #### 
+#### ================================  Anion F  ================================ #### 
 
 subset <- data %>% filter(X == "F")
 table(subset$GroupCat) %>% sort(decreasing = TRUE)
 X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
 Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
 
-#### -------------   step 0: PCA   ------------- #### 
+#### -----------------------------   step 0: PCA   ----------------------------- #### 
 
 pca <- prcomp(X, scale = TRUE)
 summary(pca) 
