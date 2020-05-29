@@ -471,7 +471,7 @@ remove_identical_cal <- function(data){
 #-----------------------------------------------------------------------------------
 
 resample = function(index_list){
-  index_list[sample(length(index_list))]
+  index_list[sample(length(index_list), length(index_list), replace = TRUE)]
 }
 
 get_samples <- function(Y){

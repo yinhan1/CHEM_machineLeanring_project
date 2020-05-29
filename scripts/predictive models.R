@@ -113,8 +113,7 @@ ridge_cv = cv.glmnet(x = X, y = Y, alpha = 0,
                      type.measure = "deviance", 
                      family = "multinomial")
 
-tb_ridge = prediction_table(alpha = 0, 
-                            lambda = ridge_cv$lambda.min) 
+tb_ridge = prediction_table(alpha = 0, lambda = ridge_cv$lambda.min) 
 tb_ridge$r %>% print_accurate_tb()
 tb_ridge$t[,-5] %>% highlight_tb_count()
 tb_ridge$t[,-5] %>% highlight_tb_percent()
@@ -126,8 +125,7 @@ lasso_cv = cv.glmnet(x = X, y = Y, alpha = 1,
                      type.measure = "deviance", 
                      family = "multinomial")
 
-tb_lasso = prediction_table(alpha = 1, 
-                            lambda = lasso_cv$lambda.min) 
+tb_lasso = prediction_table(alpha = 1, lambda = lasso_cv$lambda.min) 
 tb_lasso$r %>% print_accurate_tb()
 tb_lasso$t[,-5] %>% highlight_tb_count()
 tb_lasso$t[,-5] %>% highlight_tb_percent() 
@@ -147,46 +145,39 @@ tb_elastic$t[,-5] %>% highlight_tb_count()
 tb_elastic$t[,-5] %>% highlight_tb_percent()
 
 
-#### CI for multinomial reg
+#### bootstrap coefficients
 
-B <- 5000
-cubic = 
-  hexagonal = 
-  linb = 
-  tilted = 
-  data.frame(Intercept = 0, t(X[1,]))
-
-for (i in 1:B){
-  rows_to_take <- get_samples(Y)
-  ridge_cv = cv.glmnet(x = X[rows_to_take,], 
-                       y = Y[rows_to_take], 
-                       alpha = 0, 
-                       nfolds = 5, 
-                       type.measure = "deviance", 
-                       family = "multinomial")
-  
-  tb_coef <- ridge_cv %>% 
-    get_coef(tuning_parameter = ridge_cv$lambda.min)
-  
-  cubic[i,] <- tb_coef[,2]
-  hexagonal[i,] <-  tb_coef[,3]
-  linb[i,] <-  tb_coef[,4]
-  tilted[i,] <-  tb_coef[,5]
-}
+# B <- 2000
+# dummy_coef <- data.frame(feature = NULL, group_cat = NULL, value = NULL)
+# for (i in 1:B){
+#   rows_to_take <- get_samples(Y)
+#   ridge_cv_B <- cv.glmnet(x = X[rows_to_take,],
+#                          y = Y[rows_to_take],
+#                          alpha = 0,
+#                          nfolds = 5,
+#                          type.measure = "deviance",
+#                          family = "multinomial")
+#  
+#   dummy_coef <- rbind(dummy_coef,
+#                       ridge_cv_B %>% 
+#                         get_coef(tuning_parameter = ridge_cv_B$lambda.min) %>% 
+#                         reshape2::melt(id.vars = "feature", variable.name = "group_cat"))
+# }
 
 #### plot CI 
-bind_rows(
-  get_CIbound(cubic, "Cubic"),
-  get_CIbound(hexagonal, "Hexagonal"),
-  get_CIbound(linb, "LiNb03"),
-  get_CIbound(tilted, "Tilted")
-) %>% 
-  full_join(
-    ridge_cv %>% 
-      get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
-      reshape2::melt(id.vars = "feature", value.name = "est", variable.name = "group_cat") %>%
-      mutate(feature = recode(feature, "(Intercept)" = "Intercept"))
-  ) %>%
+
+# full_join(
+#   dummy_coef %>% 
+#     group_by(feature, group_cat) %>% 
+#     summarise(lower = quantile(value, probs = 0.025),
+#               upper = quantile(value, probs = 0.975)),
+#   ridge_cv %>% 
+#     get_coef(tuning_parameter = ridge_cv$lambda.min) %>% 
+#     reshape2::melt(id.vars = "feature", value.name = "est", variable.name = "group_cat")
+#   ) %>% 
+#   write.csv(file = "data/CI_anionO.csv", row.names = FALSE)
+  
+read.csv("data/CI_anionO.csv") %>% 
   ggplot(aes(x = feature, y = est, color = group_cat)) +
   geom_point(size = 1) +
   geom_errorbar(aes(ymin = lower, ymax = upper), alpha = 0.5, width = 0.5) +
