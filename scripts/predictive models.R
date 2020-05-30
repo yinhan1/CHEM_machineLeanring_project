@@ -34,7 +34,6 @@ table(data$X) %>% sort(decreasing = TRUE)
 
 #### ================================  Anion O  ================================ #### 
 
-
 subset <- data %>% filter(X == "O")
 table(subset$GroupCat) %>% sort(decreasing = TRUE)
 
@@ -47,7 +46,6 @@ Y <- subset$GroupCat %>%
 
 
 #### ---------------------------   section 0: PCA   --------------------------- #### 
-
 
 pca <- prcomp(X, scale = TRUE)
 summary(pca) 
@@ -203,11 +201,12 @@ best.iter = gbm.perf(gbm_cv, method="cv")
 
 summary(gbm_cv) %>% View()
 
+set.seed(2020)
 fitControl = trainControl(method = "cv", number = 5, returnResamp = "all")
 model2 = train(GroupCat~., data = subset2[,-c(1:3)], 
                method = "gbm",
                distribution = "multinomial", 
-               trControl = fitControl, verbose = F, 
+               trControl = fitControl, verbose = F,
                tuneGrid = data.frame(.n.trees = best.iter, 
                                      .shrinkage = 0.01, 
                                      .interaction.depth = 1, 
@@ -216,34 +215,57 @@ tb = confusionMatrix(model2)$table %>% as.matrix()
 tb_sum = colSums(tb)  
 tb / tb_sum
 
+### GBM on same folds
+
+t = lapply(folds, function(id) {
+  X_test = X[id,]; X_train = X[-id,]
+  Y_test = Y[id]; Y_train = Y[-id]
+  model = gbm(GroupCat~., data = data.frame(X_train, GroupCat = Y_train),
+              shrinkage = 0.01, distribution = "multinomial",
+              n.trees = 3000, verbose = F, train.fraction = 1)
+  Y_pred = predict(model, n.trees = 3000, 
+                   newdata = as.data.frame(X_test), 
+                   type = "response") %>%
+    apply(., 1, which.max) %>% 
+    recode(
+      "1" = "Cubic",
+      "2" = "Hexagonal",
+      "3" = "LiNb03",
+      "4" = "Tilted"
+    )
+  table(factor(Y_pred, levels = levels(factor(data$GroupCat))), 
+        factor(Y_test, levels = levels(factor(data$GroupCat))))
+}) 
+lapply(t, function(x) sum(diag(x))/sum(x)) %>% unlist() %>% print_accurate_tb()
+Reduce("+",t) %>% as.matrix() %>% .[,-5] %>% highlight_tb_count()
+Reduce("+",t) %>% as.matrix() %>% .[,-5] %>% highlight_tb_percent()
 
 
-#### -------------   section 3: what we predict it wrong   ------------- #### 
+
+
+#### -------------   section 3: what predicted wrong   ------------- #### 
+
+top3 <- c("ToleranceBVP", "IonizationPotentialofA", "CrystalRadiusofA")
+
+#### ridge
 
 Y_pred = Y
 for(i in 1:length(folds)){
   id = folds[[i]]
   X_test = X[id,]; X_train = X[-id,]
   Y_test = Y[id]; Y_train = Y[-id]
-  model = gbm(GroupCat~., data = data.frame(X_train, GroupCat = Y_train),
-              shrinkage = 0.01, distribution = "multinomial",
-              n.trees = 3000, verbose = F, train.fraction = 1)
-  Y_pred[id] = predict(model, n.trees = 3000, newdata = as.data.frame(X_test), type = "response") %>% 
-    apply(., 1, which.max)
+  model = glmnet(x = X_train, y = Y_train, alpha = 0, family = "multinomial")
+  Y_pred[id] = predict(model, newx = X_test, type = "class", s = ridge_cv$lambda.min)
 }
-
 Y_pred = recode(Y_pred, 
                 "1" = "Cubic",
                 "2" = "Hexagonal",
                 "3" = "LiNb03",
                 "4" = "Tilted")
-
-
-top3 <- c("ToleranceBVP", "IonizationPotentialofA", "CrystalRadiusofA")
 df_plot <- 
   data.frame(
-    Compound = subset$Compound, 
-    Cluster = as.character(subset$GroupCat), 
+    Compound = subset2$Compound, 
+    Cluster = as.character(subset2$GroupCat), 
     X[,top3],
     tag = ifelse(Y_pred == Y, 'correct', 'wrong')
   ) 
@@ -270,6 +292,112 @@ plot_ly() %>%
     marker = list(line = list(color = "red", width = 2, opacity = 0.5)),
     opacity = 0.8
   )
+
+mean(Y==Y_pred)
+
+
+#### lasso
+
+Y_pred = Y
+for(i in 1:length(folds)){
+  id = folds[[i]]
+  X_test = X[id,]; X_train = X[-id,]
+  Y_test = Y[id]; Y_train = Y[-id]
+  model = glmnet(x = X_train, y = Y_train, alpha = 1, family = "multinomial")
+  Y_pred[id] = predict(model, newx = X_test, type = "class", s = lasso_cv$lambda.min)
+}
+Y_pred = recode(Y_pred, 
+                "1" = "Cubic",
+                "2" = "Hexagonal",
+                "3" = "LiNb03",
+                "4" = "Tilted")
+df_plot <- 
+  data.frame(
+    Compound = subset2$Compound, 
+    Cluster = as.character(subset2$GroupCat), 
+    X[,top3],
+    tag = ifelse(Y_pred == Y, 'correct', 'wrong')
+  ) 
+
+plot_ly() %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'correct'),
+    x = ~ToleranceBVP, 
+    y = ~IonizationPotentialofA, 
+    z = ~CrystalRadiusofA, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    opacity = 0.8
+  ) %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'wrong'),
+    x = ~ToleranceBVP, 
+    y = ~IonizationPotentialofA, 
+    z = ~CrystalRadiusofA, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    marker = list(line = list(color = "red", width = 2, opacity = 0.5)),
+    opacity = 0.8
+  )
+
+mean(Y==Y_pred)
+
+
+#### GBM
+
+Y_pred = Y
+for(i in 1:length(folds)){
+  id = folds[[i]]
+  X_test = X[id,]; X_train = X[-id,]
+  Y_test = Y[id]; Y_train = Y[-id]
+  model = gbm(GroupCat~., data = data.frame(X_train, GroupCat = Y_train),
+              shrinkage = 0.01, distribution = "multinomial",
+              n.trees = 3000, verbose = F, train.fraction = 1)
+  Y_pred[id] = predict(model, n.trees = 3000, 
+                       newdata = as.data.frame(X_test), 
+                       type = "response") %>% 
+    apply(., 1, which.max)
+}
+Y_pred = recode(Y_pred, 
+                "1" = "Cubic",
+                "2" = "Hexagonal",
+                "3" = "LiNb03",
+                "4" = "Tilted")
+df_plot <- 
+  data.frame(
+    Compound = subset2$Compound, 
+    Cluster = as.character(subset2$GroupCat), 
+    X[,top3],
+    tag = ifelse(Y_pred == Y, 'correct', 'wrong')
+  ) 
+
+plot_ly() %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'correct'),
+    x = ~ToleranceBVP, 
+    y = ~IonizationPotentialofA, 
+    z = ~CrystalRadiusofA, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    opacity = 0.8
+  ) %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'wrong'),
+    x = ~ToleranceBVP, 
+    y = ~IonizationPotentialofA, 
+    z = ~CrystalRadiusofA, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    marker = list(line = list(color = "red", width = 2, opacity = 0.5)),
+    opacity = 0.8
+  )
+
+mean(Y==Y_pred)
+
 
 
 #### ================================  Anion F  ================================ #### 
@@ -375,40 +503,186 @@ gbm_cv <- gbm(GroupCat~., data = subset2[,-c(1:3)],
 best.iter = gbm.perf(gbm_cv, method="cv")
 summary(gbm_cv) %>% View()
 
-fitControl = trainControl(method = "cv", number = 5, returnResamp = "all")
-model2 = train(GroupCat~., data = subset2[,-c(1:3)], method = "gbm",
-               distribution = "multinomial", trControl = fitControl, verbose=F, 
-               tuneGrid = data.frame(.n.trees = best.iter, 
-                                     .shrinkage=0.01, 
-                                     .interaction.depth=1, 
-                                     .n.minobsinnode=1))
-model2
-tb = confusionMatrix(model2)$table %>% as.matrix()
-tb_sum = colSums(tb)  
-tb / tb_sum
+### GBM on same folds
 
-#### -------------   step 5: what we predict wrong  ------------- #### 
-X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
-Y <- subset$GroupCat %>% droplevels() %>% as.matrix()
+t = lapply(folds, function(id) {
+  X_test = X[id,]; X_train = X[-id,]
+  Y_test = Y[id]; Y_train = Y[-id]
+  model = gbm(GroupCat~., data = data.frame(X_train, GroupCat = Y_train),
+              shrinkage = 0.01, distribution = "multinomial",
+              n.trees = 3000, verbose = F, train.fraction = 1)
+  Y_pred = predict(model, n.trees = 3000, 
+                   newdata = as.data.frame(X_test), 
+                   type = "response") %>%
+    apply(., 1, which.max) %>% 
+    recode(
+      "1" = "Cubic",
+      "2" = "Hexagonal",
+      "3" = "LiNb03",
+      "4" = "Tilted"
+    )
+  table(factor(Y_pred, levels = levels(factor(data$GroupCat))), 
+        factor(Y_test, levels = levels(factor(data$GroupCat))))
+}) 
+lapply(t, function(x) sum(diag(x))/sum(x)) %>% unlist() %>% print_accurate_tb()
+Reduce("+",t) %>% as.matrix() %>% .[,-(4:5)] %>% highlight_tb_count()
+Reduce("+",t) %>% as.matrix() %>% .[,-(4:5)] %>% highlight_tb_percent()
 
-top3 <- c("ToleranceBVP","DensityatSpecofA","CrystalRadiusofBprime")
-X_top3 <- X[,top3]
+#### -------------   step 5: Wrong Predictions   ------------- #### 
 
-data.frame(
-  Compound = subset$Compound, 
-  Cluster = as.character(subset$GroupCat), 
-  X_top3
-) %>% 
-  plot_ly() %>% 
+top3 <- c("ToleranceBVP", "DensityatSpecofA", "CrystalRadiusofBprime")
+
+#### lasso
+
+Y_pred = Y
+for(i in 1:length(folds)){
+  id = folds[[i]]
+  X_test = X[id,]; X_train = X[-id,]
+  Y_test = Y[id]; Y_train = Y[-id]
+  model = glmnet(x = X_train, y = Y_train, family = "multinomial", alpha = 1)
+  Y_pred[id] = predict(model, newx = X_test, type = "class", 
+                       s =  lasso_cv$lambda.min)
+}
+Y_pred = recode(Y_pred, 
+                "1" = "Cubic",
+                "2" = "Hexagonal",
+                "3" = "LiNb03",
+                "4" = "Tilted")
+df_plot <- 
+  data.frame(
+    Compound = subset2$Compound, 
+    Cluster = as.character(subset2$GroupCat), 
+    X[,top3],
+    tag = ifelse(Y_pred == Y, 'correct', 'wrong')
+  ) 
+
+plot_ly() %>% 
   add_trace(
+    data = df_plot %>% filter(tag == 'correct'),
     x = ~ToleranceBVP, 
     y = ~DensityatSpecofA, 
     z = ~CrystalRadiusofBprime, 
-    color = ~Cluster, 
-    colors = "Paired", 
+    color = ~Cluster,
     text = ~Compound,
     type = 'scatter3d', mode = 'markers',
+    opacity = 0.8
+  ) %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'wrong'),
+    x = ~ToleranceBVP, 
+    y = ~DensityatSpecofA, 
+    z = ~CrystalRadiusofBprime, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    marker = list(line = list(color = "red", width = 2, opacity = 0.5)),
+    opacity = 0.8
+  )
+
+mean(Y==Y_pred)
+
+
+#### elastic
+
+Y_pred = Y
+for(i in 1:length(folds)){
+  id = folds[[i]]
+  X_test = X[id,]; X_train = X[-id,]
+  Y_test = Y[id]; Y_train = Y[-id]
+  model = glmnet(x = X_train, y = Y_train, family = "multinomial",
+                 alpha = elastic_cv$bestTune[[1]])
+  Y_pred[id] = predict(model, newx = X_test, type = "class", 
+                       s = elastic_cv$bestTune[[2]])
+}
+Y_pred = recode(Y_pred, 
+                "1" = "Cubic",
+                "2" = "Hexagonal",
+                "3" = "LiNb03",
+                "4" = "Tilted")
+df_plot <- 
+  data.frame(
+    Compound = subset2$Compound, 
+    Cluster = as.character(subset2$GroupCat), 
+    X[,top3],
+    tag = ifelse(Y_pred == Y, 'correct', 'wrong')
+  ) 
+
+plot_ly() %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'correct'),
+    x = ~ToleranceBVP, 
+    y = ~DensityatSpecofA, 
+    z = ~CrystalRadiusofBprime, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    opacity = 0.8
+  ) %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'wrong'),
+    x = ~ToleranceBVP, 
+    y = ~DensityatSpecofA, 
+    z = ~CrystalRadiusofBprime, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    marker = list(line = list(color = "red", width = 2, opacity = 0.5)),
+    opacity = 0.8
+  )
+
+mean(Y==Y_pred)
+
+### GBM
+
+Y_pred = Y
+for(i in 1:length(folds)){
+  id = folds[[i]]
+  X_test = X[id,]; X_train = X[-id,]
+  Y_test = Y[id]; Y_train = Y[-id]
+  model = gbm(GroupCat~., data = data.frame(X_train, GroupCat = Y_train),
+              shrinkage = 0.01, distribution = "multinomial",
+              n.trees = 3000, verbose = F, train.fraction = 1)
+  Y_pred[id] = predict(model, n.trees = 3000, 
+                       newdata = as.data.frame(X_test), 
+                       type = "response") %>% 
+    apply(., 1, which.max)
+}
+Y_pred = recode(Y_pred, 
+                "1" = "Cubic",
+                "2" = "Hexagonal",
+                "3" = "LiNb03",
+                "4" = "Tilted")
+
+df_plot <- 
+  data.frame(
+    Compound = subset2$Compound, 
+    Cluster = as.character(subset2$GroupCat), 
+    X[,top3],
+    tag = ifelse(Y_pred == Y, 'correct', 'wrong')
+  ) 
+
+plot_ly() %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'correct'),
+    x = ~ToleranceBVP, 
+    y = ~DensityatSpecofA, 
+    z = ~CrystalRadiusofBprime, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    opacity = 0.8
+  ) %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'wrong'),
+    x = ~ToleranceBVP, 
+    y = ~DensityatSpecofA, 
+    z = ~CrystalRadiusofBprime, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    marker = list(line = list(color = "red", width = 2, opacity = 0.5)),
     opacity = 0.8
   )
 
 
+mean(Y==Y_pred)
