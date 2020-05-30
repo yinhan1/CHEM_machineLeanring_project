@@ -177,11 +177,14 @@ tb_elastic$t[,-5] %>% highlight_tb_percent()
 #   ) %>% 
 #   write.csv(file = "data/CI_anionO.csv", row.names = FALSE)
   
-read.csv("data/CI_anionO.csv") %>% 
+read.csv("data/CI_anionO_ridge.csv") %>% 
+  filter(!(lower<0 & upper>0)) %>% 
+  filter(feature != "(Intercept)") %>% 
+  droplevels() %>% 
   ggplot(aes(x = feature, y = est, color = group_cat)) +
-  geom_point(size = 1) +
+  geom_point(size = 0.5) +
   geom_errorbar(aes(ymin = lower, ymax = upper), alpha = 0.5, width = 0.5) +
-  geom_hline(yintercept = 0, size = 1, alpha = 0.7, color = "grey50") +
+  geom_hline(yintercept = 0, size = 0.2, color = "grey30", linetype = "dashed") +
   scale_color_nejm() +
   facet_wrap(group_cat~., nrow=1) +
   labs(x = "", y = "Coefficient", color = "Group") +
@@ -215,28 +218,58 @@ tb / tb_sum
 
 
 
-#### -------------   section 3: which we predict it wrong   ------------- #### 
+#### -------------   section 3: what we predict it wrong   ------------- #### 
+
+Y_pred = Y
+for(i in 1:length(folds)){
+  id = folds[[i]]
+  X_test = X[id,]; X_train = X[-id,]
+  Y_test = Y[id]; Y_train = Y[-id]
+  model = gbm(GroupCat~., data = data.frame(X_train, GroupCat = Y_train),
+              shrinkage = 0.01, distribution = "multinomial",
+              n.trees = 3000, verbose = F, train.fraction = 1)
+  Y_pred[id] = predict(model, n.trees = 3000, newdata = as.data.frame(X_test), type = "response") %>% 
+    apply(., 1, which.max)
+}
+
+Y_pred = recode(Y_pred, 
+                "1" = "Cubic",
+                "2" = "Hexagonal",
+                "3" = "LiNb03",
+                "4" = "Tilted")
+
 
 top3 <- c("ToleranceBVP", "IonizationPotentialofA", "CrystalRadiusofA")
+df_plot <- 
+  data.frame(
+    Compound = subset$Compound, 
+    Cluster = as.character(subset$GroupCat), 
+    X[,top3],
+    tag = ifelse(Y_pred == Y, 'correct', 'wrong')
+  ) 
 
-X <- subset[,-c(1:4)] %>% remove_identical_cal() %>% as.matrix()
-data.frame(
-  Compound = subset$Compound, 
-  Cluster = as.character(subset$GroupCat), 
-  X[,top3]
-  ) %>% 
-  plot_ly() %>% 
+plot_ly() %>% 
   add_trace(
+    data = df_plot %>% filter(tag == 'correct'),
     x = ~ToleranceBVP, 
     y = ~IonizationPotentialofA, 
     z = ~CrystalRadiusofA, 
-    color = ~Cluster, 
-    colors = "Paired", 
+    color = ~Cluster,
     text = ~Compound,
     type = 'scatter3d', mode = 'markers',
     opacity = 0.8
+  ) %>% 
+  add_trace(
+    data = df_plot %>% filter(tag == 'wrong'),
+    x = ~ToleranceBVP, 
+    y = ~IonizationPotentialofA, 
+    z = ~CrystalRadiusofA, 
+    color = ~Cluster,
+    text = ~Compound,
+    type = 'scatter3d', mode = 'markers',
+    marker = list(line = list(color = "red", width = 2, opacity = 0.5)),
+    opacity = 0.8
   )
-
 
 
 #### ================================  Anion F  ================================ #### 
