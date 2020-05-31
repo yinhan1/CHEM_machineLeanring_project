@@ -34,12 +34,13 @@ table(data$X) %>% sort(decreasing = TRUE)
 
 #### ================================  Anion O  ================================ #### 
 
-subset <- data %>% filter(X == "O")
+subset <- data %>% filter(X == "O") 
 table(subset$GroupCat) %>% sort(decreasing = TRUE)
 
 X <- subset[,-c(1:4)] %>% 
   remove_identical_cal() %>% 
-  as.matrix()
+  as.matrix() 
+  
 Y <- subset$GroupCat %>% 
   droplevels() %>% 
   as.matrix()
